@@ -22,7 +22,7 @@ What Chopiefy does is in the Company library. This file covers only how money wo
   due date, in Lagos time.
 - Parties (households, clients, suppliers) are in the Parties tab. Households and event clients need a
   WhatsApp number for their invoice link; if one is missing, ask staff for it. An email is optional: if
-  there is one, Paystack emails the invoice and reminders as well.
+  there is one, Paystack emails them the invoice as well.
 
 ## Approvals and limits
 - The owner sets a per-payment limit and a daily payout limit. The server knows the current values and

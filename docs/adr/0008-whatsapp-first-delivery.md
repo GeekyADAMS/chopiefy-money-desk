@@ -13,8 +13,9 @@ on WhatsApp. Sending WhatsApps to customers from the server is out of reach here
 - The exercise allows only made-up data and no one's personal number.
 
 What Paystack does (test mode, 2026-11-01):
-- `send_notification: true` on a payment request emails the invoice and pay link; `paymentrequest/notify` emails a
-  reminder. Delivery to a real inbox is being checked.
+- `send_notification: true` on a payment request emails the invoice and pay link: it arrived in a real inbox
+  ("Payment request from Chopiefy (Demo) for NGN 100.00", 2026-11-02). `paymentrequest/notify` returns success,
+  but no reminder email arrived, and the request's `notifications` list stays empty.
 - Every payment request needs a customer, and every customer needs a valid email. Without a customer the API
   returns HTTP 500 `unknown`. `name@households.chopiefy.invalid` is refused as invalid; `@example.com`, which
   never receives mail, is accepted.
@@ -24,8 +25,9 @@ What Paystack does (test mode, 2026-11-01):
   (`https://wa.me/<customer's number>?text=<message with the pay link>`). Tapping it opens WhatsApp on staff's
   phone with the message typed to the right person; they press send. It comes from Chopiefy's own number, the
   one households already know, and because a person sends it, the 24-hour rule doesn't apply.
-- Paystack emails as well, but only to a real address (`send_notification` true, and `notify` on reminders).
-  Event clients usually have one; it is a free second channel and a written record.
+- Paystack emails the invoice as well, but only to a real address (`send_notification` true). Event clients
+  usually have one; it is a free second channel and a written record. `chase_debtor` still calls `notify` for
+  them, but never tells staff an email reminder went out, because we couldn't see one arrive.
 - A party with no email gets a placeholder at `example.com` and notifications off, so Paystack never mails it.
 - The 48-hour reminder limit and "check Paystack before chasing" apply to the tool call, whichever channel is
   used. We record `last_chased` ourselves because Paystack's `notifications` list stays empty.
