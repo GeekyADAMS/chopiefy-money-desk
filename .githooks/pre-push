@@ -1,0 +1,12 @@
+#!/bin/sh
+# Mechanical gate before every push, by a person or an agent. The judgment half of the gate is the
+# verify-and-review skill (.claude/skills/verify-and-review). Pushing with --no-verify is a review blocker.
+set -e
+
+# ponytail: scans the commit being pushed from (HEAD), not every commit in the range; add gitleaks if history matters.
+if git grep -nIE 'sk_(test|live)_[0-9A-Za-z]{20,}' HEAD -- ':!pnpm-lock.yaml'; then
+  echo "pre-push: a Paystack secret key is committed. Remove it, rewrite the commit and rotate the key." >&2
+  exit 1
+fi
+
+pnpm --silent verify
