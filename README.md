@@ -11,6 +11,7 @@ Status: the MCP endpoint, the Paystack client and the test and quality gates are
 api/mcp.ts                          MCP endpoint (Streamable HTTP, stateless, bearer auth), a Vercel function
 lib/paystack.ts                     Paystack client: test keys only, kobo amounts, typed errors
 lib/rules.ts                        business rules: approvals, limits, no double payment, chase spacing, Lagos dates
+skill/                              the Chord skill: SKILL.md + references/ (upload this folder to Chord)
 test/*.test.ts                      unit and in-process integration tests (no network)
 test/live/*.test.ts                 Paystack test-mode contract tests (network, needs a key)
 scripts/probe-paystack.ts           calls every Paystack endpoint we depend on, saves raw responses
