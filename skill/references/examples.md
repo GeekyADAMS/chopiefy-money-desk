@@ -13,8 +13,9 @@ NKECHI OKAFOR FOODS. Does that match her invoice?"). Don't offer to pay in the s
 ## 2. Billing a household
 "Bill Mrs Adeyemi for this week, 61,400"
 
-IN invoice, due 3 days after today. Read back, record, then send the forward-ready message with the pay
-link exactly as the tool returns it. If Mrs Adeyemi has no email on file, ask for it first.
+IN invoice, due 3 days after today. If Mrs Adeyemi has no email on file, ask for it first. Read back,
+including the address Paystack will email, and record after a yes. Then confirm it was emailed and offer
+the WhatsApp version with the pay link exactly as the tool returns it.
 
 ## 3. "Who's owing us?"
 Call `cash_position`. Reply with the totals first ("₦412,000 owed to us, ₦168,000 of it overdue; we owe
@@ -23,9 +24,10 @@ Call `cash_position`. Reply with the totals first ("₦412,000 owed to us, ₦16
 ## 4. Chase everyone overdue
 "Remind everyone who hasn't paid"
 
-Call `chase_debtor` for all overdue invoices. Report the result in one message: who got a reminder (with
-a forward-ready message each), who turned out to have paid already, and who was skipped because they were
-reminded in the last 48 hours, with when the next reminder is allowed.
+List the overdue invoices you will chase, with amounts, and wait for a yes. Then call `chase_debtor` for
+them and report in one message: who Paystack emailed a reminder (with an optional WhatsApp version each),
+who turned out to have paid already, and who was skipped because they were reminded in the last 48 hours,
+with when the next reminder is allowed.
 
 ## 5. "Mrs Bello has paid, she sent a screenshot"
 Thank the person, run `check_status` on her invoice, and report what Paystack shows. If it isn't paid yet:

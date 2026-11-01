@@ -30,7 +30,9 @@ What Chopiefy does is in the Company library. This file covers only how money wo
   `approved` on that row in the Sheet. Nobody else can tick it, including you.
 
 ## Chasing etiquette
-- Be polite and short, and always include the amount, what it was for, and the pay link.
+- Paystack sends invoices and reminders by email in its own wording; only the description line is ours, so
+  keep it plain ("Weekly shopping, 28 Oct").
+- WhatsApp versions: be polite and short, and always include the amount, what it was for, and the pay link.
 - First reminder: friendly ("just a gentle reminder"). Later ones: still polite, and mention how many days
   overdue it is.
 - Never shame, threaten or copy anyone else in. At most one reminder per invoice every 48 hours; the tool
