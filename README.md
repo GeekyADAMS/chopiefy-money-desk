@@ -11,9 +11,11 @@ Status: the MCP endpoint, the Paystack client and the test and quality gates are
 api/mcp.ts                          MCP endpoint (Streamable HTTP, stateless, bearer auth), a Vercel function
 lib/paystack.ts                     Paystack client: test keys only, kobo amounts, typed errors
 lib/rules.ts                        business rules: approvals, limits, no double payment, chase spacing, Lagos dates
+lib/sheet.ts                        Google Sheets client: service-account sign-in, layout check, RAW writes
 test/*.test.ts                      unit and in-process integration tests (no network)
-test/live/*.test.ts                 Paystack test-mode contract tests (network, needs a key)
+test/live/*.test.ts                 Paystack test-mode and Sheet contract tests (network, needs keys)
 scripts/probe-paystack.ts           calls every Paystack endpoint we depend on, saves raw responses
+scripts/setup-sheet.ts              lays out the Ledger and Parties tabs, safe to run again
 docs/adr/                           architecture decision records, one per major decision
 .githooks/pre-push                  runs the secret scan and `pnpm verify` before every push
 .github/workflows/verify.yml        same gate in CI
@@ -26,9 +28,10 @@ Requires Node 22+ and pnpm (`corepack enable` picks up the pinned version).
 
 ```sh
 pnpm install                    # also points git at .githooks
-cp .env.example .env.local      # fill in MCP_TOKEN and a Paystack sk_test_ key
+cp .env.example .env.local      # fill in MCP_TOKEN, a Paystack sk_test_ key and the Sheet credentials
 pnpm verify                     # typecheck + tests, no keys needed
-pnpm test:live                  # Paystack test-mode contract tests
+pnpm test:live                  # Paystack test-mode and Sheet contract tests
+pnpm setup:sheet                # lay out the Sheet's tabs, then protect the approved column by hand
 pnpm probe:paystack             # Paystack test-mode probe, writes probe-output/
 pnpm dev                        # local server via the Vercel CLI, endpoint at /api/mcp
 ```

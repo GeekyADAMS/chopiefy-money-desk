@@ -7,7 +7,8 @@ are the way they are.
 ## Commands
 
 - `pnpm verify`: typecheck plus unit and in-process integration tests. This is the definition of green.
-- `pnpm test:live`: Paystack test-mode contract tests (needs `sk_test_` in `.env.local`).
+- `pnpm test:live`: Paystack test-mode and Sheet contract tests (needs the keys in `.env.local`).
+- `pnpm setup:sheet`: lays out the Ledger and Parties tabs (ADR 0010); safe to run again.
 - `pnpm probe:paystack`: exercises every Paystack call we depend on and writes `probe-output/`.
 
 ## How we work
