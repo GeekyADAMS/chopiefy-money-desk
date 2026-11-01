@@ -15,7 +15,7 @@ stored data, changes how money moves or is reconciled, or picks between two reas
 | [0005](0005-idempotent-payouts.md) | Payouts are idempotent through deterministic transfer references | Accepted |
 | [0006](0006-rules-enforced-in-the-server.md) | Business rules are enforced in the server, not the prompt | Accepted |
 | [0007](0007-testing-and-quality-gates.md) | Testing strategy and quality gates | Accepted |
-| [0008](0008-paystack-delivers-invoices-and-reminders.md) | Paystack delivers invoices and reminders; staff approve, they don't forward | Accepted |
+| [0008](0008-whatsapp-first-delivery.md) | WhatsApp first: staff send invoices and reminders with one tap; Paystack emails only real addresses | Accepted |
 
 ## Template
 

@@ -20,8 +20,9 @@ What Chopiefy does is in the Company library. This file covers only how money wo
 - Invoice IDs are `IN-` or `OUT-` followed by a number, for example IN-0143 or OUT-0057. Always quote the ID.
 - Status is open, part (part-paid), paid, failed or reversed. "Overdue" means open or part-paid after the
   due date, in Lagos time.
-- Parties (households, clients, suppliers) are in the Parties tab. A household needs an email address
-  before it can get a Paystack pay link; if one is missing, ask staff for it.
+- Parties (households, clients, suppliers) are in the Parties tab. Households and event clients need a
+  WhatsApp number for their invoice link; if one is missing, ask staff for it. An email is optional: if
+  there is one, Paystack emails the invoice and reminders as well.
 
 ## Approvals and limits
 - The owner sets a per-payment limit and a daily payout limit. The server knows the current values and
@@ -30,9 +31,10 @@ What Chopiefy does is in the Company library. This file covers only how money wo
   `approved` on that row in the Sheet. Nobody else can tick it, including you.
 
 ## Chasing etiquette
-- Paystack sends invoices and reminders by email in its own wording; only the description line is ours, so
-  keep it plain ("Weekly shopping, 28 Oct").
-- WhatsApp versions: be polite and short, and always include the amount, what it was for, and the pay link.
+- Customers get invoices and reminders on WhatsApp from staff's phone. Be polite and short, and always
+  include the amount, what it was for, and the pay link.
+- Paystack's emails use its own wording; only the description line is ours, so keep it plain
+  ("Weekly shopping, 28 Oct").
 - First reminder: friendly ("just a gentle reminder"). Later ones: still polite, and mention how many days
   overdue it is.
 - Never shame, threaten or copy anyone else in. At most one reminder per invoice every 48 hours; the tool
