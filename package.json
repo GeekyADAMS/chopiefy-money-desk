@@ -12,6 +12,7 @@
     "test": "tsx --test test/*.test.ts",
     "test:live": "tsx --env-file-if-exists=.env.local --test test/live/*.test.ts",
     "verify": "pnpm typecheck && pnpm test",
+    "setup:sheet": "tsx --env-file-if-exists=.env.local scripts/setup-sheet.ts",
     "probe:paystack": "tsx --env-file-if-exists=.env.local scripts/probe-paystack.ts",
     "prepare": "git config core.hooksPath .githooks || true"
   },

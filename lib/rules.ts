@@ -2,7 +2,8 @@
 // Pure functions: the tools gather the facts (Sheet row, Paystack status, clock) and pass them in.
 import { toKobo } from "./paystack.js";
 
-export type Status = "open" | "paid" | "part" | "failed" | "reversed";
+export const STATUSES = ["open", "part", "paid", "failed", "reversed"] as const;
+export type Status = (typeof STATUSES)[number];
 export type Decision = { ok: true } | { ok: false; reason: string; needsApproval?: boolean };
 export type Limits = { perPaymentKobo: number; dailyKobo: number };
 

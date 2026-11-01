@@ -1,6 +1,6 @@
 # 0004. The Sheet is the books, Paystack is the money, no database
 
-- Status: Accepted
+- Status: Accepted. The client library choice is superseded by [0009](0009-sheets-over-plain-fetch.md)
 - Date: 2026-10-31
 
 ## Context

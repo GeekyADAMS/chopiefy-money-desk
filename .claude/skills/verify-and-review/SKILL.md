@@ -20,9 +20,9 @@ like a senior reviewer who has to put their name on a payments system. Run every
 Run them yourself and quote the tail of the real output. Never report a result you didn't run.
 
 1. `pnpm verify`: typecheck plus unit and in-process integration tests.
-2. `pnpm test:live` if `.env.local` has an `sk_test_` key and the change touches `lib/paystack.ts` or any tool that
-   moves money. With no key, say "live tests skipped: no key". That is not a pass.
-3. Secrets: `git diff <base>...HEAD | grep -nE 'sk_(test|live)_[0-9A-Za-z]{8,}'` must find nothing, and no `.env*` file
+2. `pnpm test:live` if `.env.local` has the keys and the change touches `lib/paystack.ts`, `lib/sheet.ts` or any
+   tool that moves money. With no key, say "live tests skipped: no key". That is not a pass.
+3. Secrets: `git diff <base>...HEAD | grep -nE 'sk_(test|live)_[0-9A-Za-z]{8,}|BEGIN (RSA )?PRIVATE KEY|[e]wogICJ0eXBlIjogInNlcnZpY2VfYWNjb3Vu'` must find nothing, and no `.env*` file
    other than `.env.example` may be tracked (`git ls-files | grep -E '^\.env'`).
 4. Any check that can't run (no network, no key) is listed as NOT RUN with the reason.
 

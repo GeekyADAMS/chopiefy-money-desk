@@ -8,5 +8,10 @@ if git grep -nIE 'sk_(test|live)_[0-9A-Za-z]{20,}' HEAD -- ':!pnpm-lock.yaml'; t
   echo "pre-push: a Paystack secret key is committed. Remove it, rewrite the commit and rotate the key." >&2
   exit 1
 fi
+# A Google service account key, as PEM or as the base64 JSON file we keep in GOOGLE_SERVICE_ACCOUNT_B64.
+if git grep -nIE 'BEGIN (RSA )?PRIVATE KEY|[e]wogICJ0eXBlIjogInNlcnZpY2VfYWNjb3Vu' HEAD -- ':!pnpm-lock.yaml'; then
+  echo "pre-push: a Google service account key is committed. Remove it, rewrite the commit and rotate the key." >&2
+  exit 1
+fi
 
 pnpm --silent verify
