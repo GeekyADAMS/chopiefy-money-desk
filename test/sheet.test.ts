@@ -101,17 +101,17 @@ test("refuses to read a tab whose headers were moved or renamed", async () => {
 
 test("appends in column order as RAW text, skipping unset cells", async () => {
   useAccount();
-  const { calls } = google(() => ({ updates: { updatedRange: "Ledger!A7:N7" } }));
+  const { calls } = google(() => ({ updates: { updatedRange: "Ledger!A7:M7" } }));
 
   const row = await appendRow("Ledger", { id: "OUT-0058", party: "=HYPERLINK(\"x\")", amount_ngn: 85000, status: "open" });
 
   assert.equal(row, 7);
   const url = new URL(calls[0]!.url);
-  assert.equal(url.pathname, "/v4/spreadsheets/sheet-123/values/Ledger!A:N:append");
+  assert.equal(url.pathname, "/v4/spreadsheets/sheet-123/values/Ledger!A:M:append", "stops before the owner's column");
   assert.equal(url.searchParams.get("valueInputOption"), "RAW", "RAW keeps =… as text, never a formula");
   assert.equal(calls[0]!.init.method, "POST");
   const sent = JSON.parse(calls[0]!.init.body as string).values[0];
-  assert.equal(sent.length, COLUMNS.Ledger.length);
+  assert.equal(sent.length, COLUMNS.Ledger.length - 1);
   assert.equal(sent[0], "OUT-0058");
   assert.equal(sent[2], "=HYPERLINK(\"x\")");
   assert.equal(sent[4], 85000);
@@ -129,9 +129,13 @@ test("updates only the named cells of one row", async () => {
     valueInputOption: "RAW",
     data: [
       { range: "Ledger!G5", values: [["paid"]] },
-      { range: "Ledger!L5", values: [["2026-11-01T11:20:41Z"]] },
+      { range: "Ledger!K5", values: [["2026-11-01T11:20:41Z"]] },
     ],
   });
+});
+
+test("the owner's approval column is last, so appends never span it once it is protected", () => {
+  assert.equal(COLUMNS.Ledger.at(-1), "approved");
 });
 
 test("never writes the owner's approval column", async () => {

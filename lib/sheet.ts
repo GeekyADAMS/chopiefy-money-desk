@@ -3,7 +3,7 @@ import { createSign } from "node:crypto";
 
 export const COLUMNS = {
   Ledger: ["id", "direction", "party", "description", "amount_ngn", "due_date", "status", "paystack_code",
-    "recipient_code", "last_chased", "approved", "paid_at", "created_at", "note"],
+    "recipient_code", "last_chased", "paid_at", "created_at", "note", "approved"],
   Parties: ["name", "kind", "phone", "email", "bank_code", "account_number", "account_name", "recipient_code"],
 } as const;
 
@@ -12,8 +12,11 @@ export type Column<T extends Tab> = (typeof COLUMNS)[T][number];
 export type Cell = string | number | boolean;
 export type Row<T extends Tab> = { row: number } & Record<Column<T>, Cell>;
 
-// Only the owner approves, by ticking the box in the Sheet (ADR 0010). The server must never write it.
+// Only the owner approves, by ticking the box in the Sheet (ADR 0010). The server must never write it, and once
+// the owner protects it, Google refuses any write that spans it. Owner-only columns therefore come last, and
+// appends stop before them.
 const OWNER_ONLY = new Set<string>(["approved"]);
+const writable = (tab: Tab): readonly string[] => COLUMNS[tab].filter((c) => !OWNER_ONLY.has(c));
 
 export class SheetError extends Error {
   constructor(message: string, readonly httpStatus: number) {
@@ -76,7 +79,7 @@ export async function sheets<T>(method: "GET" | "POST", path: string, body?: unk
 }
 
 const letter = (index: number) => String.fromCharCode(65 + index); // ponytail: A–Z only; our widest tab has 14 columns
-const span = (tab: Tab) => `${tab}!A:${letter(COLUMNS[tab].length - 1)}`;
+const span = (tab: Tab, width: number = COLUMNS[tab].length) => `${tab}!A:${letter(width - 1)}`;
 
 function refuseOwnerOnly(values: object) {
   const blocked = Object.keys(values).filter((c) => OWNER_ONLY.has(c));
@@ -102,8 +105,9 @@ export async function readRows<T extends Tab>(tab: T): Promise<Row<T>[]> {
 // Appends one row and returns its sheet row number. Unset cells are sent as null, which Sheets leaves alone.
 export async function appendRow<T extends Tab>(tab: T, values: Partial<Record<Column<T>, Cell>>): Promise<number> {
   refuseOwnerOnly(values);
-  const cells = COLUMNS[tab].map((c) => (values as Record<string, Cell>)[c] ?? null);
-  const res = await sheets<{ updates: { updatedRange: string } }>("POST", `/values/${span(tab)}:append?valueInputOption=RAW`, {
+  const columns = writable(tab);
+  const cells = columns.map((c) => (values as Record<string, Cell>)[c] ?? null);
+  const res = await sheets<{ updates: { updatedRange: string } }>("POST", `/values/${span(tab, columns.length)}:append?valueInputOption=RAW`, {
     values: [cells],
   });
   return Number(res.updates.updatedRange.match(/(\d+):/)![1]);

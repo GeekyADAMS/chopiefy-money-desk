@@ -23,19 +23,28 @@ if (create.length) await update(create);
 titles = (await meta()).sheets.map((s) => s.properties);
 const idOf = (tab: Tab) => titles.find((t) => t.title === tab)!.sheetId;
 
-// 2. Header rows: written when empty, left alone when right, and a stop when someone changed them.
+// 2. Header rows: written when the tab has no data yet (so a layout change before go-live just applies), left
+// alone when right, and a stop when they differ above real data.
 for (const tab of tabs) {
-  const { values } = await sheets<{ values?: string[][] }>("GET", `/values/${tab}!1:1`);
-  const header = values?.[0] ?? [];
+  const { values = [] } = await sheets<{ values?: string[][] }>("GET", `/values/${tab}!1:2`);
+  const header = values[0] ?? [];
   const want: readonly string[] = COLUMNS[tab];
-  if (header.length === 0) {
-    await sheets("POST", "/values:batchUpdate", { valueInputOption: "RAW", data: [{ range: `${tab}!A1`, values: [want] }] });
-  } else if (header.join() !== want.join()) {
-    throw new Error(`${tab} row 1 is "${header.join(", ")}", expected "${want.join(", ")}". Fix it by hand; nothing was overwritten.`);
+  if (header.join() === want.join()) continue;
+  if (values.length > 1) {
+    throw new Error(`${tab} row 1 is "${header.join(", ")}", expected "${want.join(", ")}". The tab has data, so fix it by hand; nothing was overwritten.`);
   }
+  await sheets("POST", "/values:batchUpdate", { valueInputOption: "RAW", data: [{ range: `${tab}!A1`, values: [want] }] });
 }
 
-// 3. Formatting and validation, so hand edits stay inside the layout.
+// 3. Is the approved column protected yet? Only the owner can set that up. Once it is, the service account can't
+// touch that column, so the Ledger's formatting (applied before protection) is left as it is.
+const approved = COLUMNS.Ledger.indexOf("approved");
+const ledger = (await meta()).sheets.find((s) => s.properties.title === "Ledger")!;
+const isProtected = (ledger.protectedRanges ?? []).some(
+  (p) => !p.warningOnly && (p.range.startColumnIndex ?? 0) <= approved && (p.range.endColumnIndex ?? Infinity) > approved,
+);
+
+// 4. Formatting and validation, so hand edits stay inside the layout.
 const col = <T extends Tab>(tab: T, name: (typeof COLUMNS)[T][number]) => {
   const i = (COLUMNS[tab] as readonly string[]).indexOf(name);
   return { sheetId: idOf(tab), startRowIndex: 1, startColumnIndex: i, endColumnIndex: i + 1 };
@@ -47,32 +56,32 @@ const format = (range: object, numberFormat: object) => ({
   repeatCell: { range, cell: { userEnteredFormat: { numberFormat } }, fields: "userEnteredFormat.numberFormat" },
 });
 const text = { type: "TEXT", pattern: "@" };
+// Clearing first means a column that moved doesn't keep its old dropdown or checkbox.
+const header = (tab: Tab) => [
+  { setDataValidation: { range: { sheetId: idOf(tab), startRowIndex: 1 } } },
+  { updateSheetProperties: { properties: { sheetId: idOf(tab), gridProperties: { frozenRowCount: 1 } }, fields: "gridProperties.frozenRowCount" } },
+  { repeatCell: { range: { sheetId: idOf(tab), endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: "userEnteredFormat.textFormat.bold" } },
+];
 
 await update([
-  ...tabs.flatMap((tab) => [
-    { updateSheetProperties: { properties: { sheetId: idOf(tab), gridProperties: { frozenRowCount: 1 } }, fields: "gridProperties.frozenRowCount" } },
-    { repeatCell: { range: { sheetId: idOf(tab), endRowIndex: 1 }, cell: { userEnteredFormat: { textFormat: { bold: true } } }, fields: "userEnteredFormat.textFormat.bold" } },
+  ...(isProtected ? [] : [
+    ...header("Ledger"),
+    oneOf(col("Ledger", "direction"), ["IN", "OUT"]),
+    oneOf(col("Ledger", "status"), STATUSES),
+    { setDataValidation: { range: col("Ledger", "approved"), rule: { condition: { type: "BOOLEAN" }, strict: true } } },
+    format(col("Ledger", "due_date"), { type: "DATE", pattern: "yyyy-mm-dd" }),
+    format(col("Ledger", "amount_ngn"), { type: "NUMBER", pattern: "#,##0.00" }),
   ]),
-  oneOf(col("Ledger", "direction"), ["IN", "OUT"]),
-  oneOf(col("Ledger", "status"), STATUSES),
-  { setDataValidation: { range: col("Ledger", "approved"), rule: { condition: { type: "BOOLEAN" }, strict: true } } },
-  format(col("Ledger", "due_date"), { type: "DATE", pattern: "yyyy-mm-dd" }),
-  format(col("Ledger", "amount_ngn"), { type: "NUMBER", pattern: "#,##0.00" }),
+  ...header("Parties"),
   oneOf(col("Parties", "kind"), ["household", "event", "supplier"]),
   ...(["phone", "bank_code", "account_number"] as const).map((c) => format(col("Parties", c), text)),
 ]);
 
-// 4. The approved column must be protected so only the owner can tick it. Only the owner can set that up.
-const approved = COLUMNS.Ledger.indexOf("approved");
-const ledger = (await meta()).sheets.find((s) => s.properties.title === "Ledger")!;
-const isProtected = (ledger.protectedRanges ?? []).some(
-  (p) => !p.warningOnly && (p.range.startColumnIndex ?? 0) <= approved && (p.range.endColumnIndex ?? Infinity) > approved,
-);
 const letter = String.fromCharCode(65 + approved);
 console.log("Ledger and Parties tabs are laid out.");
 console.log(
   isProtected
-    ? `The approved column (${letter}) is protected.`
+    ? `The approved column (${letter}) is protected, so the Ledger's formatting was left as it is.`
     : `NEXT (owner): protect the approved column so only you can tick it. In the Sheet: select column ${letter} of Ledger,
   Data → Protect sheets and ranges → Set permissions → "Only you" → Done. Then run this again to check.`,
 );

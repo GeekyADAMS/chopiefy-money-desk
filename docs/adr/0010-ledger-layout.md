@@ -23,10 +23,10 @@ new, whether a payment is still in flight and whether a cash payment is verified
 | `paystack_code` | IN: the payment request code (`PRQ_…`). OUT: the latest transfer reference (`chopiefy-out-0057-1`) |
 | `recipient_code` | OUT: the Paystack recipient a transfer went to |
 | `last_chased` | When the last reminder link was issued (ISO time) |
-| `approved` | Checkbox. Owner only: protected so only the owner's Google account can edit it |
 | `paid_at` | When Paystack says it was paid (ISO time). Only the server writes it |
 | `created_at` | When the row was recorded (ISO time) |
 | `note` | Free text, for people |
+| `approved` | Checkbox, always the last column. Owner only: protected so only the owner's Google account can edit it |
 
 `Parties` tab: `name`, `kind` (`household`, `event` or `supplier`), `phone` (international, for WhatsApp links),
 `email` (optional, ADR 0008), `bank_code`, `account_number`, `account_name` (as the bank returned it),
@@ -42,7 +42,9 @@ Derived, not stored:
 - **Cash, unverified** = `paid` with no `paid_at`: the owner set it by hand and Paystack never saw the money.
 - **Overdue** = `open` or `part` with `due_date` before today in Lagos (ADR 0004).
 
-The server never writes `approved`; `lib/sheet.ts` refuses to. Owner-entered text columns (`phone`,
+The server never writes `approved`; `lib/sheet.ts` refuses to. It is the last column because once the owner
+protects it, Google refuses any write whose range spans it, even one that leaves that cell empty (seen
+2026-11-02 when it sat in the middle). Appends write `A:M` and stop before it. Owner-entered text columns (`phone`,
 `bank_code`, `account_number`) are formatted as plain text so leading zeros survive.
 
 ## Consequences
