@@ -96,7 +96,8 @@ export async function readRows<T extends Tab>(tab: T): Promise<Row<T>[]> {
   }
   const rows: Row<T>[] = [];
   values.forEach((cells, i) => {
-    if (i === 0 || cells.every((c) => c === "")) return;
+    // A row is real only if it has an ID (or a party name): unticked checkboxes make empty rows read as FALSE.
+    if (i === 0 || cells[0] === undefined || cells[0] === "") return;
     rows.push(Object.fromEntries([["row", i + 1], ...columns.map((c, j) => [c, cells[j] ?? ""])]) as Row<T>);
   });
   return rows;

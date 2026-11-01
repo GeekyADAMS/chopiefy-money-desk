@@ -44,7 +44,8 @@ Derived, not stored:
 
 The server never writes `approved`; `lib/sheet.ts` refuses to. It is the last column because once the owner
 protects it, Google refuses any write whose range spans it, even one that leaves that cell empty (seen
-2026-11-02 when it sat in the middle). Appends write `A:M` and stop before it. Owner-entered text columns (`phone`,
+2026-11-02 when it sat in the middle). Appends write `A:M` and stop before it. A row counts only if it has an
+`id` (or, in Parties, a `name`), because empty rows under a checkbox column read as `FALSE`. Owner-entered text columns (`phone`,
 `bank_code`, `account_number`) are formatted as plain text so leading zeros survive.
 
 ## Consequences
@@ -52,6 +53,8 @@ protects it, Google refuses any write whose range spans it, even one that leaves
 - Protecting the `approved` column is a manual step for the owner; `pnpm setup:sheet` prints how. Until it is done,
   any editor could approve.
 - Renaming or moving a column stops the server with a clear error (ADR 0009) until the header row is put back.
+- With the protection on, the service account can't delete a Ledger row (a whole row spans the protected column).
+  That suits the books: invoices are corrected or marked, never deleted by the server.
 
 ## Alternatives considered
 - A `verified` checkbox on Parties: one more owner-only column, and it can go stale when details change.

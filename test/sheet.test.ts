@@ -70,10 +70,11 @@ test("gets a new token when the cached one is within a minute of expiring", asyn
   assert.equal(tokenCalls().length, 2);
 });
 
-test("reads rows keyed by column, with sheet row numbers, blanks filled and empty rows skipped", async () => {
+test("reads rows keyed by column, with sheet row numbers, blanks filled and rows without an ID skipped", async () => {
   useAccount();
+  const unticked = [...Array(13).fill(""), false]; // an empty row whose approved checkbox reads FALSE
   const { calls } = google(() =>
-    values([ledgerHeader, ["IN-0143", "IN", "Mrs Adeyemi", "Weekly shopping", 61400, "2026-11-04", "open"], [], ["OUT-0057", "OUT"]]),
+    values([ledgerHeader, ["IN-0143", "IN", "Mrs Adeyemi", "Weekly shopping", 61400, "2026-11-04", "open"], unticked, ["OUT-0057", "OUT"], unticked]),
   );
 
   const rows = await readRows("Ledger");
@@ -83,7 +84,7 @@ test("reads rows keyed by column, with sheet row numbers, blanks filled and empt
   assert.equal(rows[0]!.id, "IN-0143");
   assert.equal(rows[0]!.amount_ngn, 61400);
   assert.equal(rows[0]!.approved, "", "missing trailing cells read as empty");
-  assert.equal(rows[1]!.row, 4, "row numbers count the skipped empty row");
+  assert.equal(rows[1]!.row, 4, "row numbers count the skipped row");
   const url = new URL(calls[0]!.url);
   assert.equal(url.pathname, "/v4/spreadsheets/sheet-123/values/Ledger!A:N");
   assert.equal(url.searchParams.get("valueRenderOption"), "UNFORMATTED_VALUE");
