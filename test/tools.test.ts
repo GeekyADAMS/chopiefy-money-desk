@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { POST } from "../api/mcp.js";
+import { COLUMNS } from "../lib/sheet.js";
 import { fakeWorld, type FakePaystack, type FakeSheet } from "./fakes.js";
 
 type Json = Record<string, any>;
@@ -49,7 +50,7 @@ test("the endpoint lists the tools, each with a description and an input schema"
     }),
   );
   const { tools } = ((await res.json()) as Json).result;
-  assert.deepEqual(tools.map((t: Json) => t.name).sort(), ["cash_position", "chase_debtor", "check_status", "record_invoice"]);
+  assert.deepEqual(tools.map((t: Json) => t.name).sort(), ["cash_position", "chase_debtor", "check_status", "pay_supplier", "record_invoice"]);
   for (const t of tools) assert.ok(t.description.length > 40 && t.inputSchema.type === "object", t.name);
 });
 
@@ -174,7 +175,7 @@ test("record_invoice OUT: a new supplier's account is resolved, saved and shown 
   assert.equal(data.new_bank_details, true);
   assert.ok(!JSON.stringify(data).includes("0123454821"), "the full account number never goes back to chat");
   assert.deepEqual(sheet.rows("Parties")[0], { ...supplier, phone: "", email: "", recipient_code: "RCP_1" });
-  assert.equal(sheet.rows("Ledger")[0]!.recipient_code, "", "set when a transfer is made, not before");
+  assert.equal(sheet.rows("Ledger")[0]!.recipient_code, "RCP_1", "the account this invoice is for");
 });
 
 test("record_invoice OUT: different bank details for a known supplier are refused as possible fraud", async () => {
@@ -213,6 +214,14 @@ test("record_invoice OUT: an unknown or ambiguous bank is refused with the choic
   assert.equal(sheet.rows("Parties").length, 1, "only the Zenith supplier");
 });
 
+test("record_invoice OUT: a known supplier's details count as new until a payout to them has succeeded", async () => {
+  scene();
+  const bill = { direction: "OUT", amount_ngn: 1000, description: "x", due_date: "2026-11-06" };
+
+  assert.equal((await call("record_invoice", { ...bill, party: "Mama Nkechi" })).data.new_bank_details, false, "OUT-0050 was paid to her");
+  assert.equal((await call("record_invoice", { ...bill, party: "Gas Man" })).data.new_bank_details, true, "never paid, as pay_supplier sees it");
+});
+
 test("record_invoice rejects bad input before touching anything", async () => {
   for (const bad of [{ amount_ngn: -5 }, { amount_ngn: 10.001 }, { due_date: "8/11/2026" }, { direction: "SIDEWAYS" }]) {
     assert.equal((await call("record_invoice", { ...billAdeyemi, ...bad })).isError, true, JSON.stringify(bad));
@@ -239,7 +248,7 @@ function scene() {
     { id: "IN-0141", direction: "IN", party: "Mrs Adeyemi", description: "Shopping", amount_ngn: 61400, due_date: "2026-11-02", status: "open", paystack_code: paystack.request(6_140_000) },
     { id: "IN-0142", direction: "IN", party: "Eko Events", description: "Wedding balance", amount_ngn: 250000, due_date: "2026-11-03", status: "open", paystack_code: paystack.request(25_000_000), last_chased: "2026-11-04T12:00:00.000Z" },
     { id: "IN-0138", direction: "IN", party: "Mrs Okon", description: "Shopping", amount_ngn: 9000, due_date: "2026-10-20", status: "paid" },
-    { id: "OUT-0050", direction: "OUT", party: "Mama Nkechi", description: "Peppers", amount_ngn: 30000, due_date: "2026-10-30", status: "paid", paid_at: "2026-10-30T10:00:00.000Z", recipient_code: "RCP_1" },
+    { id: "OUT-0050", direction: "OUT", party: "Mama Nkechi", description: "Peppers", amount_ngn: 30000, due_date: "2026-10-30", status: "paid", paid_at: "2026-10-30T10:00:00.000Z", paystack_code: "chopiefy-out-0050-1", recipient_code: "RCP_1" },
     { id: "OUT-0057", direction: "OUT", party: "Mama Nkechi", description: "Tomatoes", amount_ngn: 85000, due_date: "2026-11-06", status: "open", approved: false },
     { id: "OUT-0058", direction: "OUT", party: "Gas Man", description: "Gas refill", amount_ngn: 250000, due_date: "2026-11-20", status: "open", approved: false },
   );
@@ -360,4 +369,271 @@ test("check_status: hand-entered cash is reported as unverified, and unknown IDs
   assert.match(cash.data.detail, /unverified/);
 
   assert.match((await call("check_status", { invoice_id: "IN-9999" })).data.refused, /isn't in the Ledger/);
+});
+
+// ---------- pay_supplier ----------
+
+const ledgerRow = (id: string) => sheet.rows("Ledger").find((r) => r.id === id)!;
+function setCell(id: string, column: (typeof COLUMNS.Ledger)[number], value: string | number | boolean) {
+  sheet.tabs.Ledger.find((r) => r[0] === id)![COLUMNS.Ledger.indexOf(column)] = value;
+}
+const transfer = (reference: string, status: string, amount = 8_500_000) =>
+  (paystack.transfers[reference] = { reference, amount, recipient: "RCP_1", status, transfer_code: "TRF_0" });
+
+test("pay_supplier: pays a known supplier within limits, and records the transfer", async () => {
+  scene();
+
+  const { isError, data } = await call("pay_supplier", { invoice_id: "out-0057" });
+
+  assert.equal(isError, false, data);
+  assert.deepEqual([data.id, data.status, data.amount, data.reference], ["OUT-0057", "paid", "₦85,000", "chopiefy-out-0057-1"]);
+  assert.equal(data.to, "Guaranty Trust Bank ••••4821 (NKECHI OKAFOR FOODS)");
+  assert.ok(!JSON.stringify(data).includes("0123454821"), "the full account number never goes back to chat");
+  assert.deepEqual(paystack.transfers["chopiefy-out-0057-1"], {
+    reference: "chopiefy-out-0057-1", amount: 8_500_000, recipient: "RCP_1", status: "success", transfer_code: "TRF_1",
+  });
+  const row = ledgerRow("OUT-0057");
+  assert.deepEqual([row.status, row.paystack_code, row.recipient_code, row.paid_at], ["paid", "chopiefy-out-0057-1", "RCP_1", new Date(NOW).toISOString()]);
+});
+
+test("pay_supplier: if the Sheet can't store the reference first, no money moves", async () => {
+  scene();
+  sheet.failWritesAfter = 0;
+
+  const { isError, data } = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.equal(isError, true);
+  assert.match(data, /Google Sheet/);
+  assert.deepEqual(paystack.transfers, {});
+});
+
+test("pay_supplier: asking twice, even at the same moment, pays once", async () => {
+  scene();
+
+  const [a, b] = await Promise.all([call("pay_supplier", { invoice_id: "OUT-0057" }), call("pay_supplier", { invoice_id: "OUT-0057" })]);
+  const again = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.equal(Object.keys(paystack.transfers).length, 1);
+  assert.deepEqual([a.data.status, b.data.status], ["paid", "paid"], "the one Paystack refused as a duplicate reports the first");
+  assert.match(again.data.refused, /already paid/);
+  assert.equal(ledgerRow("OUT-0057").status, "paid");
+});
+
+test("pay_supplier: new bank details or an amount over the limit wait for the owner's tick in the Sheet", async () => {
+  scene();
+
+  const waiting = await call("pay_supplier", { invoice_id: "OUT-0058" });
+
+  assert.match(waiting.data.refused, /owner's approval/);
+  assert.match(waiting.data.refused, /new bank details/);
+  assert.match(waiting.data.refused, /per-payment limit/);
+  assert.deepEqual(paystack.transfers, {});
+  assert.equal(ledgerRow("OUT-0058").paystack_code, "", "nothing written for a refused payout");
+
+  setCell("OUT-0058", "approved", true); // the owner ticks it
+  const paid = await call("pay_supplier", { invoice_id: "OUT-0058" });
+
+  assert.equal(paid.data.status, "paid");
+  assert.equal(paystack.transfers["chopiefy-out-0058-1"]!.amount, 25_000_000);
+  assert.equal(paystack.transfers["chopiefy-out-0058-1"]!.recipient, "RCP_2");
+});
+
+test("pay_supplier: the daily limit counts what went out today in Lagos and payouts still unconfirmed", async () => {
+  scene();
+  sheet.seed(
+    "Ledger",
+    { id: "OUT-0051", direction: "OUT", party: "Mama Nkechi", description: "Rice", amount_ngn: 100000, status: "paid", paid_at: "2026-11-04T23:30:00.000Z", paystack_code: "chopiefy-out-0051-1", recipient_code: "RCP_1" },
+    { id: "OUT-0052", direction: "OUT", party: "Gas Man", description: "Gas", amount_ngn: 100000, status: "open", paystack_code: "chopiefy-out-0052-1" },
+    { id: "OUT-0053", direction: "OUT", party: "Mama Nkechi", description: "Yams", amount_ngn: 100000, status: "paid", paid_at: "2026-11-04T22:30:00.000Z", paystack_code: "chopiefy-out-0053-1", recipient_code: "RCP_1" },
+  );
+  transfer("chopiefy-out-0052-1", "pending", 10_000_000);
+
+  const { data } = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  // 00:30 on the 5th in Lagos counts as today; 23:30 on the 4th doesn't. ₦100,000 paid today, ₦100,000 unconfirmed
+  // and this ₦85,000 come to ₦285,000, under the ₦300,000 daily limit. The next ₦20,000 goes over.
+  assert.equal(data.status, "paid", JSON.stringify(data));
+  sheet.seed("Ledger", { id: "OUT-0059", direction: "OUT", party: "Mama Nkechi", description: "Oil", amount_ngn: 20000, status: "open" });
+  const over = await call("pay_supplier", { invoice_id: "OUT-0059" });
+  assert.match(over.data.refused, /daily limit/);
+  assert.match(over.data.refused, /₦285,000 already paid today/);
+});
+
+test("pay_supplier: a hand-edited account number that no longer matches Paystack's recipient is refused", async () => {
+  scene();
+  sheet.tabs.Parties.find((r) => r[0] === "Mama Nkechi")![COLUMNS.Parties.indexOf("account_number")] = "0123459999";
+
+  const { data } = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.match(data.refused, /bank details/);
+  assert.match(data.refused, /owner/);
+  assert.deepEqual(paystack.transfers, {});
+});
+
+test("pay_supplier: checks a stored reference with Paystack before anything else", async () => {
+  scene();
+  sheet.seed(
+    "Ledger",
+    { id: "OUT-0061", direction: "OUT", party: "Mama Nkechi", description: "a", amount_ngn: 1000, status: "open", paystack_code: "chopiefy-out-0061-1" },
+    { id: "OUT-0062", direction: "OUT", party: "Mama Nkechi", description: "b", amount_ngn: 1000, status: "open", paystack_code: "chopiefy-out-0062-1" },
+    { id: "OUT-0063", direction: "OUT", party: "Mama Nkechi", description: "c", amount_ngn: 1000, status: "failed", paystack_code: "chopiefy-out-0063-2" },
+    { id: "OUT-0064", direction: "OUT", party: "Mama Nkechi", description: "d", amount_ngn: 1000, status: "open", paystack_code: "chopiefy-out-0064-1" },
+  );
+  transfer("chopiefy-out-0061-1", "success", 100_000); // went through; the Sheet never heard
+  transfer("chopiefy-out-0062-1", "pending", 100_000);
+  transfer("chopiefy-out-0063-2", "failed", 100_000);
+  // OUT-0064: the reference was stored but Paystack never saw the transfer
+
+  const [succeeded, pending, failed, unseen] = await Promise.all(
+    ["OUT-0061", "OUT-0062", "OUT-0063", "OUT-0064"].map((invoice_id) => call("pay_supplier", { invoice_id })),
+  );
+
+  assert.equal(succeeded.data.status, "paid");
+  assert.equal(ledgerRow("OUT-0061").status, "paid");
+  assert.equal(pending.data.status, "pending");
+  assert.match(pending.data.detail, /don't pay again/i);
+  assert.equal(failed.data.reference, "chopiefy-out-0063-3", "the next attempt after a failure");
+  assert.equal(unseen.data.reference, "chopiefy-out-0064-1", "the same reference, since Paystack never saw it");
+  assert.deepEqual(Object.keys(paystack.transfers).sort(), [
+    "chopiefy-out-0061-1", "chopiefy-out-0062-1", "chopiefy-out-0063-2", "chopiefy-out-0063-3", "chopiefy-out-0064-1",
+  ]);
+  assert.deepEqual([ledgerRow("OUT-0063").status, ledgerRow("OUT-0063").paystack_code], ["paid", "chopiefy-out-0063-3"]);
+});
+
+test("pay_supplier: a low Paystack balance is refused plainly, and paying after a top-up reuses the reference", async () => {
+  scene();
+  paystack.failures["POST /transfer"] = { status: 400, code: "insufficient_balance", message: "Your balance is not enough to fulfil this request" };
+
+  const low = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.match(low.data.refused, /top up/i);
+  assert.match(low.data.refused, /nothing was sent/i);
+
+  delete paystack.failures["POST /transfer"];
+  const paid = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.equal(paid.data.reference, "chopiefy-out-0057-1");
+  assert.equal(paid.data.status, "paid");
+});
+
+test("pay_supplier: when Paystack doesn't answer, the outcome is unknown and the agent is told to check first", async () => {
+  scene();
+  paystack.failures["POST /transfer"] = "down";
+
+  const { isError, data } = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.equal(isError, true);
+  assert.match(data, /check_status/);
+  assert.match(data, /don't pay again/i);
+  assert.deepEqual([ledgerRow("OUT-0057").status, ledgerRow("OUT-0057").paystack_code], ["open", "chopiefy-out-0057-1"]);
+});
+
+test("pay_supplier: refuses what it can't pay", async () => {
+  scene();
+  sheet.seed("Parties", { name: "Fish Man", kind: "supplier" });
+  sheet.seed("Ledger", { id: "OUT-0060", direction: "OUT", party: "Fish Man", description: "Fish", amount_ngn: 1000, status: "open", approved: true });
+
+  assert.match((await call("pay_supplier", { invoice_id: "IN-0140" })).data.refused, /owed to Chopiefy/);
+  assert.match((await call("pay_supplier", { invoice_id: "OUT-9999" })).data.refused, /isn't in the Ledger/);
+  assert.match((await call("pay_supplier", { invoice_id: "OUT-0050" })).data.refused, /already paid/);
+  assert.match((await call("pay_supplier", { invoice_id: "OUT-0060" })).data.refused, /no bank details on file/, "even with the owner's tick");
+  assert.deepEqual(paystack.transfers, {});
+});
+
+test("pay_supplier: when the money goes but the Sheet can't record it, the reply says it was paid, and the next call records it", async () => {
+  scene();
+  sheet.failWritesAfter = 1; // the reference is stored, marking it paid fails
+
+  const first = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.equal(first.isError, false, first.data);
+  assert.equal(first.data.status, "paid");
+  assert.match(first.data.detail, /couldn't record/);
+  assert.equal(ledgerRow("OUT-0057").status, "open");
+
+  sheet.failWritesAfter = Infinity;
+  const again = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.equal(again.data.status, "paid");
+  assert.equal(ledgerRow("OUT-0057").status, "paid");
+  assert.equal(Object.keys(paystack.transfers).length, 1);
+});
+
+test("pay_supplier and check_status never mark an invoice paid from a transfer that isn't its own", async () => {
+  scene();
+  transfer("chopiefy-out-0050-1", "success"); // same amount as OUT-0057, so only the reference gives it away
+  setCell("OUT-0057", "paystack_code", "chopiefy-out-0050-1"); // another invoice's reference, typed in by hand
+  sheet.seed("Ledger", { id: "OUT-0065", direction: "OUT", party: "Mama Nkechi", description: "Oil", amount_ngn: 100000, status: "open", paystack_code: "chopiefy-out-0065-1" });
+  transfer("chopiefy-out-0065-1", "success", 8_500_000); // the amount was edited after the money went
+
+  for (const invoice_id of ["OUT-0057", "OUT-0065"]) {
+    for (const tool of ["pay_supplier", "check_status"]) {
+      const { data } = await call(tool, { invoice_id });
+      assert.equal(data.status, "check", `${tool} ${invoice_id}`);
+      assert.match(data.detail, /owner should check/);
+      assert.doesNotMatch(data.detail, /paid anything|nothing was sent/i, "money may have moved; never say it didn't");
+    }
+    assert.equal(ledgerRow(invoice_id).status, "open");
+  }
+  assert.equal(Object.keys(paystack.transfers).length, 2, "nothing new sent");
+});
+
+test("pay_supplier: a transfer status it can't read stops the payout and says who should look", async () => {
+  scene();
+  setCell("OUT-0057", "paystack_code", "chopiefy-out-0057-1");
+  transfer("chopiefy-out-0057-1", "abandoned");
+
+  const { data } = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.equal(data.status, "check");
+  assert.match(data.detail, /Paystack dashboard/);
+  assert.match(data.detail, /chopiefy-out-0057-2/, "the owner's way out once the dashboard shows no money left");
+  assert.equal(Object.keys(paystack.transfers).length, 1);
+});
+
+test("pay_supplier: cash the owner marked paid by hand doesn't verify a supplier's bank details", async () => {
+  scene();
+  sheet.seed("Ledger", { id: "OUT-0054", direction: "OUT", party: "Gas Man", description: "Gas", amount_ngn: 5000, status: "paid", recipient_code: "RCP_2" });
+  sheet.seed("Ledger", { id: "OUT-0066", direction: "OUT", party: "Gas Man", description: "Gas", amount_ngn: 5000, status: "open" });
+
+  assert.match((await call("pay_supplier", { invoice_id: "OUT-0066" })).data.refused, /new bank details/);
+});
+
+test("pay_supplier: the owner's tick doesn't carry over to bank details changed after an attempt", async () => {
+  scene();
+  setCell("OUT-0058", "approved", true);
+  setCell("OUT-0058", "paystack_code", "chopiefy-out-0058-1");
+  setCell("OUT-0058", "recipient_code", "RCP_9"); // the first attempt went to an account Parties no longer holds
+  paystack.transfers["chopiefy-out-0058-1"] = { reference: "chopiefy-out-0058-1", amount: 25_000_000, recipient: "RCP_9", status: "failed", transfer_code: "TRF_0" };
+
+  const { data } = await call("pay_supplier", { invoice_id: "OUT-0058" });
+
+  assert.match(data.refused, /changed since OUT-0058 was recorded/);
+  assert.equal(Object.keys(paystack.transfers).length, 1);
+});
+
+test("pay_supplier: bank details changed in Parties after the invoice was recorded aren't paid on the owner's tick", async () => {
+  scene();
+  const { data: recorded } = await call("record_invoice", { direction: "OUT", party: "Mama Nkechi", amount_ngn: 150000, description: "Rice", due_date: "2026-11-06" });
+  const parties = sheet.tabs.Parties.find((r) => r[0] === "Mama Nkechi")!;
+  const at = (c: (typeof COLUMNS.Parties)[number]) => COLUMNS.Parties.indexOf(c);
+  [parties[at("bank_code")], parties[at("account_number")], parties[at("recipient_code")]] = ["999992", "0987650011", paystack.recipient("999992", "0987650011")];
+  setCell(recorded.id, "approved", true); // over the per-payment limit, ticked by the owner
+
+  const { data } = await call("pay_supplier", { invoice_id: recorded.id });
+
+  assert.match(data.refused, /changed since/);
+  assert.deepEqual(paystack.transfers, {});
+});
+
+test("pay_supplier: if Paystack calls the reference a duplicate and then can't be reached, the outcome is unknown", async () => {
+  scene();
+  transfer("chopiefy-out-0057-1", "success"); // sent by a call whose reply was lost before the Sheet heard
+  paystack.failures["GET /transfer/verify"] = "down";
+
+  const { isError, data } = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.equal(isError, true);
+  assert.match(data, /check_status/);
+  assert.equal(Object.keys(paystack.transfers).length, 1);
 });
