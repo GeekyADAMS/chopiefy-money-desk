@@ -12,8 +12,10 @@ api/mcp.ts                          MCP endpoint (Streamable HTTP, stateless, be
 lib/paystack.ts                     Paystack client: test keys only, kobo amounts, typed errors
 lib/rules.ts                        business rules: approvals, limits, no double payment, chase spacing, Lagos dates
 lib/sheet.ts                        Google Sheets client: service-account sign-in, layout check, RAW writes
+lib/ledger.ts                       facts read off the Ledger and Parties, and the WhatsApp messages (no network)
+lib/tools.ts                        the MCP tools Chord calls (contracts: ADR 0011)
 skill/                              the Chord skill: SKILL.md + references/ (upload this folder to Chord)
-test/*.test.ts                      unit and in-process integration tests (no network)
+test/*.test.ts                      unit and in-process integration tests (no network); tools run against test/fakes.ts
 test/live/*.test.ts                 Paystack test-mode and Sheet contract tests (network, needs keys)
 scripts/probe-paystack.ts           calls every Paystack endpoint we depend on, saves raw responses
 scripts/setup-sheet.ts              lays out the Ledger and Parties tabs, safe to run again

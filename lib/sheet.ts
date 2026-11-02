@@ -14,7 +14,7 @@ export type Row<T extends Tab> = { row: number } & Record<Column<T>, Cell>;
 
 // Only the owner approves, by ticking the box in the Sheet (ADR 0010). The server must never write it, and once
 // the owner protects it, Google refuses any write that spans it. Owner-only columns therefore come last, and
-// appends stop before them.
+// new rows stop before them.
 const OWNER_ONLY = new Set<string>(["approved"]);
 const writable = (tab: Tab): readonly string[] => COLUMNS[tab].filter((c) => !OWNER_ONLY.has(c));
 
@@ -79,7 +79,7 @@ export async function sheets<T>(method: "GET" | "POST", path: string, body?: unk
 }
 
 const letter = (index: number) => String.fromCharCode(65 + index); // ponytail: A–Z only; our widest tab has 14 columns
-const span = (tab: Tab, width: number = COLUMNS[tab].length) => `${tab}!A:${letter(width - 1)}`;
+const span = (tab: Tab) => `${tab}!A:${letter(COLUMNS[tab].length - 1)}`;
 
 function refuseOwnerOnly(values: object) {
   const blocked = Object.keys(values).filter((c) => OWNER_ONLY.has(c));
@@ -103,15 +103,25 @@ export async function readRows<T extends Tab>(tab: T): Promise<Row<T>[]> {
   return rows;
 }
 
-// Appends one row and returns its sheet row number. Unset cells are sent as null, which Sheets leaves alone.
-export async function appendRow<T extends Tab>(tab: T, values: Partial<Record<Column<T>, Cell>>): Promise<number> {
+// Writes one row below the last ID and returns its row number (ADR 0012). Not an append: Google counts the owner's
+// unticked checkboxes as data and appends past them, into a new row the protection refuses. Unset cells are sent
+// as null, which Sheets leaves alone.
+// ponytail: the read-back catches most collisions, not all (ADR 0012); a lock is the upgrade if writes get busy.
+export async function addRow<T extends Tab>(tab: T, values: Partial<Record<Column<T>, Cell>>): Promise<number> {
   refuseOwnerOnly(values);
   const columns = writable(tab);
   const cells = columns.map((c) => (values as Record<string, Cell>)[c] ?? null);
-  const res = await sheets<{ updates: { updatedRange: string } }>("POST", `/values/${span(tab, columns.length)}:append?valueInputOption=RAW`, {
-    values: [cells],
-  });
-  return Number(res.updates.updatedRange.match(/(\d+):/)![1]);
+  const last = letter(columns.length - 1);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { values: ids = [] } = await sheets<{ values?: Cell[][] }>("GET", `/values/${tab}!A:A`);
+    const row = ids.length + 1; // Google trims trailing empty rows, so this is the row below the last ID
+    const range = `${tab}!A${row}:${last}${row}`;
+    await sheets("POST", "/values:batchUpdate", { valueInputOption: "RAW", data: [{ range, values: [cells] }] });
+    const query = "valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING";
+    const [stored = []] = (await sheets<{ values?: Cell[][] }>("GET", `/values/${range}?${query}`)).values ?? [];
+    if (cells.every((c, i) => c === null || String(stored[i] ?? "") === String(c))) return row;
+  }
+  throw new SheetError(`Couldn't find a free row in ${tab}: other writes kept landing first. Try again.`, 409);
 }
 
 export async function updateCells<T extends Tab>(tab: T, row: number, values: Partial<Record<Column<T>, Cell>>): Promise<void> {

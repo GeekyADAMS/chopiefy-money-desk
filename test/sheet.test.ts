@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { createVerify, generateKeyPairSync } from "node:crypto";
 import { afterEach, mock, test } from "node:test";
-import { appendRow, COLUMNS, readRows, SheetError, updateCells } from "../lib/sheet.js";
+import { addRow, COLUMNS, readRows, SheetError, updateCells } from "../lib/sheet.js";
 
 const { privateKey, publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
 const pem = privateKey.export({ type: "pkcs8", format: "pem" }).toString();
@@ -100,23 +100,63 @@ test("refuses to read a tab whose headers were moved or renamed", async () => {
   await assert.rejects(readRows("Ledger"), (err) => err instanceof SheetError && /headers/.test(err.message));
 });
 
-test("appends in column order as RAW text, skipping unset cells", async () => {
+// A fake tab for addRow: column A as Google returns it (trailing empty rows trimmed), and what lands where.
+function tab(ids: string[]) {
+  const column = [["id"], ...ids.map((id) => (id ? [id] : []))];
+  const written: Record<number, unknown[]> = {};
+  const handler = ({ url, init }: Call) => {
+    const range = decodeURIComponent(new URL(url).pathname).split("/values/")[1] ?? "";
+    if (range === "Ledger!A:A") return values(column);
+    if (url.endsWith("values:batchUpdate")) {
+      const { range: target, values: [cells] } = JSON.parse(init.body as string).data[0];
+      const row = Number(target.match(/A(\d+):/)[1]);
+      written[row] = cells;
+      column[row - 1] = [cells[0]];
+      return {};
+    }
+    const row = Number(range.match(/^Ledger!A(\d+):M\d+$/)![1]);
+    return values([written[row]!.map((c) => c ?? "")]);
+  };
+  return { handler, written, column };
+}
+
+test("adds a row below the last ID, as RAW text in column order, skipping unset cells and the owner's column", async () => {
   useAccount();
-  const { calls } = google(() => ({ updates: { updatedRange: "Ledger!A7:M7" } }));
+  const ledger = tab(["IN-0001", "", "IN-0003"]);
+  const { calls } = google(ledger.handler);
 
-  const row = await appendRow("Ledger", { id: "OUT-0058", party: "=HYPERLINK(\"x\")", amount_ngn: 85000, status: "open" });
+  const row = await addRow("Ledger", { id: "OUT-0058", party: "=HYPERLINK(\"x\")", amount_ngn: 85000, status: "open" });
 
-  assert.equal(row, 7);
-  const url = new URL(calls[0]!.url);
-  assert.equal(url.pathname, "/v4/spreadsheets/sheet-123/values/Ledger!A:M:append", "stops before the owner's column");
-  assert.equal(url.searchParams.get("valueInputOption"), "RAW", "RAW keeps =… as text, never a formula");
-  assert.equal(calls[0]!.init.method, "POST");
-  const sent = JSON.parse(calls[0]!.init.body as string).values[0];
+  assert.equal(row, 5, "after IN-0003 on row 4, gaps above left alone");
+  const write = calls.find((c) => c.url.endsWith("values:batchUpdate"))!;
+  const body = JSON.parse(write.init.body as string);
+  assert.equal(body.valueInputOption, "RAW", "RAW keeps =… as text, never a formula");
+  assert.equal(body.data[0].range, "Ledger!A5:M5", "stops before the owner's column");
+  const sent = body.data[0].values[0];
   assert.equal(sent.length, COLUMNS.Ledger.length - 1);
-  assert.equal(sent[0], "OUT-0058");
-  assert.equal(sent[2], "=HYPERLINK(\"x\")");
-  assert.equal(sent[4], 85000);
+  assert.deepEqual([sent[0], sent[2], sent[4]], ["OUT-0058", "=HYPERLINK(\"x\")", 85000]);
   assert.equal(sent[1], null, "unset cells are null, which Sheets leaves alone");
+  assert.ok(!calls.some((c) => c.url.includes(":append")), "never appends: Google's append trips over the checkbox column");
+});
+
+test("moves down a row when another write took the row first", async () => {
+  useAccount();
+  const ledger = tab(["IN-0001"]);
+  let raced = false;
+  const { calls } = google((call) => {
+    const answer = ledger.handler(call);
+    if (!raced && call.url.endsWith("values:batchUpdate")) {
+      raced = true; // someone else's row lands on row 3 just after ours
+      ledger.written[3] = ["IN-0002", "IN", "Someone else"];
+      ledger.column[2] = ["IN-0002"];
+    }
+    return answer;
+  });
+
+  const row = await addRow("Ledger", { id: "IN-0002", party: "Mrs Okon" });
+
+  assert.equal(row, 4);
+  assert.equal(calls.filter((c) => c.url.endsWith("values:batchUpdate")).length, 2);
 });
 
 test("updates only the named cells of one row", async () => {
@@ -135,7 +175,7 @@ test("updates only the named cells of one row", async () => {
   });
 });
 
-test("the owner's approval column is last, so appends never span it once it is protected", () => {
+test("the owner's approval column is last, so new rows never span it once it is protected", () => {
   assert.equal(COLUMNS.Ledger.at(-1), "approved");
 });
 
@@ -144,7 +184,7 @@ test("never writes the owner's approval column", async () => {
   const { calls } = google(() => ({}));
 
   await assert.rejects(updateCells("Ledger", 5, { approved: true }), /owner/);
-  await assert.rejects(appendRow("Ledger", { id: "OUT-0059", approved: true }), /owner/);
+  await assert.rejects(addRow("Ledger", { id: "OUT-0059", approved: true }), /owner/);
   assert.equal(calls.length, 0);
 });
 
