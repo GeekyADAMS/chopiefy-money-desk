@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { POST } from "../api/mcp.js";
 import { COLUMNS } from "../lib/sheet.js";
-import { callTool, fakeWorld, type FakePaystack, type FakeSheet } from "./fakes.js";
+import { callTool as call, fakeWorld, type FakePaystack, type FakeSheet } from "./fakes.js";
 
 type Json = Record<string, any>;
 const TOKEN = "tools-test-token";
@@ -22,8 +22,6 @@ afterEach(() => {
   mock.timers.reset();
   mock.restoreAll();
 });
-
-const call = callTool;
 
 const household = { name: "Mrs Adeyemi", kind: "household", phone: "0803 000 0001", email: "" };
 const supplier = { name: "Mama Nkechi", kind: "supplier", bank_code: "058", account_number: "0123454821", account_name: "NKECHI OKAFOR FOODS" };

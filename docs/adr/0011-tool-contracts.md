@@ -34,7 +34,7 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
 
 **`cash_position`** `{}`
 - Refreshes open IN rows from Paystack (in parallel, at most 20), writes any that are now paid, and returns: the ones
-  it just found paid (`just_paid`, so staff hear about a payment without asking for it), owed to
+  it just found paid (`just_paid`, added 2026-11-03, so staff hear about a payment without asking for it), owed to
   us (total and overdue, overdue listed oldest first), what we owe in the next 7 days, and OUT rows waiting for the
   owner's approval (from `payoutDecision`). If Paystack can't be reached, it says the figures weren't refreshed.
 

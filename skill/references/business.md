@@ -43,5 +43,5 @@ What Chopiefy does is in the Company library. This file covers only how money wo
 
 ## Demo workspace (delete this section at go-live)
 This workspace runs on Paystack test mode with made-up people. Phone numbers starting 0800 and the bank
-account named "Test" (Zenith ••••0000) are the demo's on purpose, so don't flag them. Every other check still
-applies.
+account named "Test" (Zenith ••••0000) are the demo's on purpose: don't treat them as suspicious. Still show the
+account name and ask staff to confirm it, as for any new bank details. Every other check still applies.

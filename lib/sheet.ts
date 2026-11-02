@@ -118,8 +118,8 @@ export async function addRow<T extends Tab>(tab: T, values: Partial<Record<Colum
     // A tick left on an emptied row would approve whatever lands there next.
     if (columns.length < COLUMNS[tab].length) {
       const owned = `${tab}!${letter(columns.length)}${row}:${letter(COLUMNS[tab].length - 1)}${row}`;
-      const [cells = []] = (await sheets<{ values?: Cell[][] }>("GET", `/values/${owned}?valueRenderOption=UNFORMATTED_VALUE`)).values ?? [];
-      if (cells.includes(true)) {
+      const [ownerCells = []] = (await sheets<{ values?: Cell[][] }>("GET", `/values/${owned}?valueRenderOption=UNFORMATTED_VALUE`)).values ?? [];
+      if (ownerCells.includes(true)) {
         throw new SheetError(`Row ${row} of the ${tab} has the owner's approval tick but no invoice. The owner should untick it, then try again.`, 409);
       }
     }

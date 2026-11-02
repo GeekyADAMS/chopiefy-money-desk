@@ -1,7 +1,7 @@
 // Puts the live Sheet back to the demo's starting state (ADR 0013). Run: pnpm reset:demo
 // Refuses while any approval tick is set. IDs continue above the highest in the Ledger, because Paystack remembers
 // every transfer reference.
-import { paystack } from "../lib/paystack.js";
+import { paystack, PaystackError } from "../lib/paystack.js";
 import { lagosDate } from "../lib/rules.js";
 import { COLUMNS, readRows, sheets, type Cell } from "../lib/sheet.js";
 import { demoScene, MAMA_NKECHI } from "./demo-scene.js";
@@ -12,12 +12,24 @@ const stop = (message: string): never => {
   process.exit(1);
 };
 
-// 1. A reset moves rows, so no tick may be set anywhere in the owner's column, emptied rows included.
-const { values: ticks = [] } = await sheets<{ values?: Cell[][] }>("GET", "/values/Ledger!N2:N?valueRenderOption=UNFORMATTED_VALUE");
-const ticked = ticks.flatMap((v, i) => (v[0] === true ? [i + 2] : []));
-if (ticked.length) stop(`Untick approved on Ledger row ${ticked.join(", ")} first, so no tick lands on a different invoice.`);
+// 1. A reset moves rows, so no tick may be set anywhere in the owner's column, emptied rows included. Checked again
+// just before writing, in case one was ticked meanwhile.
+async function noTicks() {
+  const { values: ticks = [] } = await sheets<{ values?: Cell[][] }>("GET", "/values/Ledger!N2:N?valueRenderOption=UNFORMATTED_VALUE");
+  const ticked = ticks.flatMap((v, i) => (v[0] === true ? [i + 2] : []));
+  if (ticked.length) stop(`Untick approved on Ledger row ${ticked.join(", ")} first, so no tick lands on a different invoice.`);
+}
+await noTicks();
 
 const [ledger, parties] = await Promise.all([readRows("Ledger"), readRows("Parties")]);
+// A payout Paystack knows about but the Sheet hasn't settled must be checked first: wiping its row would lose the only
+// record of it. A reference Paystack never saw (a refused attempt) is safe to drop.
+const unsettled: string[] = [];
+for (const r of ledger.filter((r) => r.direction === "OUT" && r.status === "open" && r.paystack_code)) {
+  const seen = await paystack("GET", `/transfer/verify/${r.paystack_code}`).then(() => true, (err) => (err instanceof PaystackError && err.httpStatus === 404 ? false : stop(`Couldn't check ${r.id} at Paystack: ${err.message}`)));
+  if (seen) unsettled.push(String(r.id));
+}
+if (unsettled.length) stop(`Run check_status on ${unsettled.join(", ")} first: Paystack has a transfer the Sheet hasn't settled.`);
 const first = Math.max(0, ...ledger.map((r) => Number(String(r.id).match(/-(\d+)$/)?.[1] ?? 0))) + 1;
 
 // 2. Mama Nkechi keeps the Paystack recipient she has, so a reset uses none of the 3 daily account lookups.
@@ -43,6 +55,8 @@ const scene = await demoScene({
     return request.request_code;
   },
 });
+
+await noTicks();
 
 // 4. Write the scene from row 2, then clear what's below it. A failed write leaves the old rows, never an empty Sheet.
 const cells = (columns: readonly string[], rows: Record<string, unknown>[]) => rows.map((r) => columns.map((c) => (r[c] ?? "") as Cell));
