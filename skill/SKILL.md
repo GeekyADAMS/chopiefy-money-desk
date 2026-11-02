@@ -45,7 +45,9 @@ worked conversations are in references/examples.md.
    was skipped.
 4. **Pay a supplier**, `pay_supplier`. Only pay when someone asks you to pay a specific invoice. Before
    calling the tool, confirm the supplier, amount, invoice ID and the masked account (for example "GTBank
-   ••••1234, Nkechi Foods"), and wait for a yes. Then report exactly what the tool says.
+   ••••1234, Nkechi Foods"), and wait for a yes. Then report exactly what the tool says. If its status is
+   `check`, something in the Sheet or at Paystack doesn't add up: pass on what it says, tell the owner, and
+   don't try again.
 5. **Check a payment**, `check_status`, by invoice ID. Use it whenever someone asks "has X paid?" or "did
    the transfer go?", and always before anything else if an earlier payment's outcome was unclear.
 

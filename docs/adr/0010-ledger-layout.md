@@ -33,7 +33,8 @@ new, whether a payment is still in flight and whether a cash payment is verified
 `recipient_code`.
 
 Derived, not stored:
-- **Bank details verified** = an earlier OUT row for the same party is `paid` with the same `recipient_code`.
+- **Bank details verified** = an earlier OUT row for the same party is `paid` with the same `recipient_code`, a
+  transfer reference and a `paid_at`, so cash the owner marked paid by hand doesn't count.
   Changing a supplier's account in Parties gives a new recipient, so the next payout needs approval. A hand
   edit to `account_number` that leaves the old `recipient_code` would pay the old account while the Sheet shows
   the new one, so `pay_supplier` fetches the recipient from Paystack and treats any mismatch with the Parties row

@@ -29,10 +29,12 @@ export function daysBetween(fromYmd: string, toYmd: string): number {
 }
 export const addDays = (ymd: string, days: number) => new Date(Date.parse(`${ymd}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 
-// Bank details count as verified once a payout to them has succeeded (ADR 0010).
+// Bank details count as verified once a Paystack payout to them has succeeded (ADR 0010). A row the owner marked
+// paid by hand has no reference or paid_at, so it doesn't count.
 export const bankDetailsVerified = (ledger: Invoice[], party: Party | undefined) =>
   Boolean(party?.recipient_code) &&
-  ledger.some((r) => r.direction === "OUT" && statusOf(r) === "paid" && r.party === party!.name && r.recipient_code === party!.recipient_code);
+  ledger.some((r) => r.direction === "OUT" && statusOf(r) === "paid" && r.paid_at && r.paystack_code &&
+    r.party === party!.name && r.recipient_code === party!.recipient_code);
 
 // The facts payoutDecision needs, from the Sheet alone. pay_supplier also checks Paystack before trusting them.
 export function payoutFacts(row: Invoice, ledger: Invoice[], party: Party | undefined, limits: PayoutInput["limits"], now: Date): PayoutInput {

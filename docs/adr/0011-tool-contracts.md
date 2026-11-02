@@ -20,7 +20,8 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
 - OUT details that differ from the Parties row are refused as changed bank details (ADR 0010). The owner changes
   them by editing the Parties row and clearing `recipient_code`.
 - New supplier: resolve the account name, create the Paystack recipient, add the Parties row, and return the
-  account name so staff can check it against the invoice.
+  account name so staff can check it against the invoice. `new_bank_details` in the reply uses the same rule as
+  `pay_supplier`: true until a payout to those details has succeeded.
 - IN: write the Ledger row first, then create the Paystack customer (email or an `example.com` placeholder,
   ADR 0008) and the payment request, then save the request code on the row. Returns the ID, the pay link
   `https://paystack.shop/pay/<code>`, the WhatsApp message and its `wa.me` link, and whether Paystack emailed it.
@@ -45,7 +46,9 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
 - A stored reference is verified first: `success` → mark paid and stop; `pending`/`otp`/`received` → in flight,
   stop; `failed`/`reversed` → the next attempt number; "not found" → Paystack never saw it, so the same reference is
   reused (Paystack would refuse a real duplicate anyway).
-- The Parties recipient is fetched from Paystack and must match the row's bank code and account number.
+- The Parties recipient is fetched from Paystack and must match the row's bank code and account number. If the
+  row's `recipient_code` (from an earlier attempt) differs from the party's, the details changed after the owner
+  ticked it, so it is refused until the owner clears the row's `recipient_code`.
 - `payoutDecision` gets: today's total (paid today in Lagos plus every open OUT row with a reference, which
   over-counts on purpose), bank details verified (an earlier paid OUT row to the same recipient), and the owner's
   tick.
@@ -59,6 +62,14 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
 - Two calls for the same invoice at once both write the same reference; Paystack accepts one and refuses the other
   as a duplicate, which then verifies and reports the first. Two different invoices at once can both pass the daily
   limit check; at one business's volume that is accepted and noted in code.
+- A transfer only settles a row if its reference is that invoice's (`chopiefy-<id>-…`) and, on success, its amount
+  matches `amount_ngn`. Otherwise the reply is status `check`: nothing is written or paid, and the owner looks.
+  This also applies to `check_status`.
+- If the money went but the Sheet can't record it, the reply still says paid, adds that the Sheet missed it, and
+  the stored reference lets the next call record it.
+- `otp` means Paystack is waiting for the account owner's OTP, so OTP must be off on the Paystack account the
+  server uses. Statuses we can't read as paid or failed (`abandoned`, `rejected`, `blocked`) stop as `check` until
+  Paystack documents whether money left the balance; its docs pages refused us (HTTP 403) on 2026-11-02.
 - Replies show the account masked (`GTBank ••••4821`).
 
 **`check_status`** `{invoice_id}`

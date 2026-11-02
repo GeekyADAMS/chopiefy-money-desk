@@ -6,7 +6,7 @@ import {
   statusOf, sumNaira, unsettled, whatsappLink, whatsappNumber, type Invoice, type Party,
 } from "./ledger.js";
 import { paystack, PaystackError, toKobo } from "./paystack.js";
-import { canChase, isOverdue, lagosDate, limitsFromEnv, payoutDecision, transferReference } from "./rules.js";
+import { canChase, formatNaira, isOverdue, lagosDate, limitsFromEnv, payoutDecision, transferReference } from "./rules.js";
 import { addRow, readRows, SheetError, updateCells, type Cell } from "./sheet.js";
 
 type Json = Record<string, any>;
@@ -291,13 +291,12 @@ async function checkStatus({ invoice_id }: { invoice_id: string }): Promise<Resu
   const reference = String(row.paystack_code);
   const transfer = await verifyTransfer(reference);
   if (!transfer) return reply({ id, status: row.status, detail: `Paystack has no transfer with reference ${reference}, so no money went out.` });
-  const status = await recordTransfer(row, transfer);
-  return reply({ id, status, detail: transferDetail(row, status, transfer.status) });
+  return reply({ id, ...(await settleTransfer(row, reference, transfer)) });
 }
 
 // ---------- supplier transfers (ADR 0005) ----------
 
-type Transfer = { status: string; updatedAt?: string };
+type Transfer = { status: string; amount?: number; updatedAt?: string };
 const TRANSFER_PENDING = new Set(["pending", "otp", "received", "processing", "queued"]);
 const paystackCode = (err: unknown) => (err instanceof PaystackError ? (err.body as { code?: string } | null)?.code : undefined);
 
@@ -311,25 +310,44 @@ async function verifyTransfer(reference: string): Promise<Transfer | undefined> 
   }
 }
 
-// Writes a transfer's outcome to its Ledger row. Returns paid, failed, reversed, pending, or Paystack's own word.
-async function recordTransfer(row: Invoice, transfer: Transfer): Promise<string> {
+// What Paystack says about an OUT row's transfer, written to the row. status is paid, failed or reversed (written),
+// pending, or "check" when a person has to look. Nothing here pays.
+async function settleTransfer(row: Invoice, reference: string, transfer: Transfer): Promise<{ status: string; detail: string }> {
+  const id = String(row.id);
+  // A hand-edited reference or amount must never mark the wrong invoice paid, or record an amount Paystack didn't send.
+  if (!reference.startsWith(`chopiefy-${id.toLowerCase()}-`) || (transfer.status === "success" && transfer.amount !== kobo(row))) {
+    return { status: "check", detail: `Paystack's transfer ${reference} (${formatNaira(transfer.amount ?? 0)}, ${transfer.status}) doesn't match ` +
+      `${id} (${naira(row)}). I haven't changed the Sheet or paid anything. The owner should check ${id}'s amount and paystack_code.` };
+  }
+  let status: string;
+  let detail: string;
   if (transfer.status === "success") {
-    if (statusOf(row) !== "paid") await markPaid(row, transfer.updatedAt ?? new Date().toISOString());
-    return "paid";
+    status = "paid";
+    detail = `Paystack shows the transfer of ${naira(row)} succeeded (reference ${reference}).`;
+  } else if (transfer.status === "failed" || transfer.status === "reversed") {
+    status = transfer.status;
+    detail = `Paystack shows the transfer ${status}. It can be paid again.`;
+  } else if (transfer.status === "otp") {
+    return { status: "pending", detail: "Paystack is holding the transfer until the account owner enters the OTP it sent them. Don't pay again." };
+  } else if (TRANSFER_PENDING.has(transfer.status)) {
+    return { status: "pending", detail: `Paystack shows the transfer still ${transfer.status}. Don't pay again; check later.` };
+  } else {
+    // ponytail: statuses like abandoned, rejected or blocked stop here until a person looks. Treat them as ended once
+    // Paystack documents whether money left the balance.
+    return { status: "check", detail: `Paystack shows the transfer as "${transfer.status}", which I can't read as paid or failed, ` +
+      `so I won't pay again. The owner should check ${reference} in the Paystack dashboard.` };
   }
-  if (transfer.status === "failed" || transfer.status === "reversed") {
-    if (row.status !== transfer.status) await updateCells("Ledger", row.row, { status: transfer.status });
-    row.status = transfer.status;
-    return transfer.status;
+  try {
+    if (status === "paid") {
+      if (statusOf(row) !== "paid") await markPaid(row, transfer.updatedAt ?? new Date().toISOString());
+    } else if (row.status !== status) {
+      await updateCells("Ledger", row.row, { status });
+      row.status = status;
+    }
+  } catch (err) {
+    detail += ` The Sheet couldn't record this (${describe(err)}), so run check_status on ${id} later to save it.`;
   }
-  return TRANSFER_PENDING.has(transfer.status) ? "pending" : transfer.status;
-}
-
-function transferDetail(row: Invoice, status: string, paystackStatus: string): string {
-  if (status === "paid") return `Paystack shows the transfer of ${naira(row)} succeeded (reference ${row.paystack_code}).`;
-  if (status === "failed" || status === "reversed") return `Paystack shows the transfer ${status}. It can be paid again.`;
-  if (status === "pending") return `Paystack shows the transfer still ${paystackStatus}. Don't pay again; check later.`;
-  return `Paystack shows the transfer as "${paystackStatus}". Don't pay again until check_status shows it failed.`;
+  return { status, detail };
 }
 
 async function paySupplier({ invoice_id }: { invoice_id: string }): Promise<Result> {
@@ -347,8 +365,8 @@ async function paySupplier({ invoice_id }: { invoice_id: string }): Promise<Resu
     const transfer = await verifyTransfer(reference);
     if (!transfer) attempt = stored || 1; // Paystack never saw it: the same reference is safe to send
     else {
-      const status = await recordTransfer(row, transfer);
-      if (status !== "failed" && status !== "reversed") return reply({ id, status, reference, detail: transferDetail(row, status, transfer.status) });
+      const settled = await settleTransfer(row, reference, transfer);
+      if (settled.status !== "failed" && settled.status !== "reversed") return reply({ id, reference, ...settled });
       attempt = stored + 1;
     }
   }
@@ -361,11 +379,16 @@ async function paySupplier({ invoice_id }: { invoice_id: string }): Promise<Resu
   if (!decision.ok) return refuse(decision.reason);
 
   if (!party?.recipient_code) return refuse(`${row.party} has no bank details on file. Record their invoice with their bank and account number first.`);
+  const changed = "Changed bank details are how most invoice fraud happens, so I haven't paid.";
+  // The owner's tick was given for the account the last attempt went to.
+  if (row.recipient_code && row.recipient_code !== party.recipient_code) {
+    return refuse(`${party.name}'s bank details changed since ${id} was last sent. ${changed} The owner should confirm the new ` +
+      `account with the supplier by phone, then clear recipient_code on ${id} in the Ledger.`);
+  }
   const recipient = await paystack<{ details: { bank_code: string; account_number: string } }>("GET", `/transferrecipient/${party.recipient_code}`);
   if (recipient.details.bank_code !== String(party.bank_code) || recipient.details.account_number !== String(party.account_number)) {
-    return refuse(`The bank details for ${party.name} in the Sheet don't match the account Paystack would pay. Changed bank details ` +
-      "are how most invoice fraud happens, so I haven't paid. The owner should confirm the account with the supplier by phone, " +
-      "then clear recipient_code in the Parties tab and record the details again.");
+    return refuse(`The bank details for ${party.name} in the Sheet don't match the account Paystack would pay. ${changed} The owner ` +
+      "should confirm the account with the supplier by phone, then clear recipient_code in the Parties tab and record the details again.");
   }
 
   const reference = transferReference(id, attempt);
@@ -384,8 +407,8 @@ async function paySupplier({ invoice_id }: { invoice_id: string }): Promise<Resu
   } catch (err) {
     if (paystackCode(err) === "duplicate_transfer_reference") {
       // Another call sent this reference first: report that transfer.
-      transfer = await verifyTransfer(reference);
-      if (!transfer) return unknown("it says this reference was used, but can't find the transfer");
+      transfer = await verifyTransfer(reference).catch(() => undefined);
+      if (!transfer) return unknown("it says this reference was used, but the transfer couldn't be looked up");
     } else if (err instanceof PaystackError && err.httpStatus < 500) {
       // A 4xx is a refusal: Paystack sent nothing. The reference stays, and the next attempt reuses it.
       const why = paystackCode(err) === "insufficient_balance"
@@ -396,8 +419,7 @@ async function paySupplier({ invoice_id }: { invoice_id: string }): Promise<Resu
       return unknown(describe(err));
     }
   }
-  const status = await recordTransfer(row, transfer);
-  return reply({ ...receipt, status, detail: transferDetail(row, status, transfer.status) });
+  return reply({ ...receipt, ...(await settleTransfer(row, reference, transfer)) });
 }
 
 export function registerTools(server: McpServer) {
