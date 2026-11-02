@@ -17,7 +17,9 @@ stored data, changes how money moves or is reconciled, or picks between two reas
 | [0007](0007-testing-and-quality-gates.md) | Testing strategy and quality gates | Accepted |
 | [0008](0008-whatsapp-first-delivery.md) | WhatsApp first: staff send invoices and reminders with one tap; Paystack emails only real addresses | Accepted |
 | [0009](0009-sheets-over-plain-fetch.md) | Google Sheets over plain fetch, with a self-signed service-account token | Accepted |
-| [0010](0010-ledger-layout.md) | Ledger and Parties layout, and the facts we derive instead of store | Accepted |
+| [0010](0010-ledger-layout.md) | Ledger and Parties layout, and the facts we derive instead of store | Accepted; append part superseded by 0012 |
+| [0011](0011-tool-contracts.md) | Tool contracts: inputs, the order of writes, and what a half-finished call leaves behind | Accepted |
+| [0012](0012-rows-written-in-place.md) | New rows are written in place below the last ID, not appended | Accepted |
 
 ## Template
 

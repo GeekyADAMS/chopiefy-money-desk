@@ -1,6 +1,7 @@
 import { timingSafeEqual } from "node:crypto";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
+import { registerTools } from "../lib/tools.js";
 
 // Chord registers this server with auth_type "bearer". Fail closed if the token is unset.
 function authorized(request: Request): boolean {
@@ -16,6 +17,7 @@ export async function POST(request: Request): Promise<Response> {
 
   // Serverless instances share no memory, so each request gets a fresh server and a stateless transport.
   const server = new McpServer({ name: "chopiefy-money-desk", version: "0.1.0" });
+  registerTools(server);
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,

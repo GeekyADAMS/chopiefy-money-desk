@@ -1,6 +1,6 @@
 # 0010. Ledger and Parties layout, and the facts we derive instead of store
 
-- Status: Accepted
+- Status: Accepted. How new rows are written is superseded by [0012](0012-rows-written-in-place.md)
 - Date: 2026-11-01
 
 ## Context
