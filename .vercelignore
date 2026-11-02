@@ -1,0 +1,7 @@
+# Upload only what the function needs: never .env.local, probe output, tests or scripts.
+/*
+!api
+!lib
+!package.json
+!pnpm-lock.yaml
+!tsconfig.json

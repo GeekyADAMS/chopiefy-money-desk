@@ -49,5 +49,13 @@ and agents also run the `verify-and-review` skill. The full rules are in [CLAUDE
 
 ## Deploy
 
-Deploy to Vercel with `MCP_TOKEN` and `PAYSTACK_SECRET_KEY` set as environment variables.
-Register `https://<deployment>/api/mcp` in Chord as an MCP server with `auth_type: "bearer"`.
+Production is `https://chopiefy-money-desk.vercel.app/api/mcp` (Vercel project `chopiefy-money-desk`, personal
+scope). The project is connected to this repo, so every merge to `main` deploys; pull requests get preview builds.
+By hand: `vercel deploy --prod`.
+
+Production needs `MCP_TOKEN`, `PAYSTACK_SECRET_KEY` (a test key), `PAYOUT_LIMIT_NGN`, `DAILY_LIMIT_NGN`, `SHEET_ID`
+and `GOOGLE_SERVICE_ACCOUNT_B64`, set in Vercel (`vercel env add <name> production`), never in the repo.
+`.vercelignore` is an allowlist: only `api/`, `lib/` and the package files are uploaded.
+
+Register the endpoint in Chord as an MCP server with auth type `bearer` and the `MCP_TOKEN` value, and list the
+five tools under Allowed tools.
