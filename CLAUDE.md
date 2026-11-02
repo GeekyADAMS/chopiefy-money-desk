@@ -10,6 +10,9 @@ are the way they are.
 - `pnpm test:live`: Paystack test-mode and Sheet contract tests (needs the keys in `.env.local`).
 - `pnpm setup:sheet`: lays out the Ledger and Parties tabs (ADR 0010); safe to run again.
 - `pnpm probe:paystack`: exercises every Paystack call we depend on and writes `probe-output/`.
+- `pnpm rehearse`: replays the demo conversation against the fakes with Claude Code headless. Use it before
+  spending Chord credits.
+- `pnpm reset:demo`: puts the live Sheet back to the demo's starting state (ADR 0013).
 
 ## How we work
 

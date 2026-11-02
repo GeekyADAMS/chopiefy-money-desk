@@ -14,6 +14,8 @@ request behaves the same way.
 - `addRow` in `lib/sheet.ts` reads column A, writes the new row at the first row below the last ID with
   `values:batchUpdate` (columns A to M only), then reads that row back. If another write landed there first, it
   moves one row down and tries again, up to three times.
+- Before writing, `addRow` reads the owner's column on that row. A tick left on an emptied row would approve
+  whatever lands there next, so it refuses and asks the owner to untick it (added 2026-11-03).
 - Nothing appends to the Ledger. The test fake has no append endpoint, and its Ledger starts with rows of unticked
   checkboxes, like the real one.
 

@@ -14,6 +14,8 @@
     "verify": "pnpm typecheck && pnpm test",
     "setup:sheet": "tsx --env-file-if-exists=.env.local scripts/setup-sheet.ts",
     "probe:paystack": "tsx --env-file-if-exists=.env.local scripts/probe-paystack.ts",
+    "reset:demo": "tsx --env-file-if-exists=.env.local scripts/reset-demo.ts",
+    "rehearse": "tsx scripts/rehearse.ts",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {

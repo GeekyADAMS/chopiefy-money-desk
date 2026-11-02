@@ -207,8 +207,10 @@ async function cashPosition(): Promise<Result> {
   const today = lagosDate(now);
   const owed = () => ledger.filter((r) => r.direction === "IN" && unsettled(r));
 
-  const checks = await Promise.all(owed().filter((r) => r.paystack_code).slice(0, 20).map(refreshIn));
+  const checked = owed().filter((r) => r.paystack_code).slice(0, 20);
+  const checks = await Promise.all(checked.map(refreshIn));
   const refreshed = checks.every((c) => c !== undefined);
+  const justPaid = checked.filter((r) => statusOf(r) === "paid").map((r) => ({ id: r.id, party: r.party, amount: naira(r) }));
 
   const stillOwed = owed();
   const overdue = stillOwed.filter((r) => isOverdue(String(r.due_date), now)).sort((x, y) => String(x.due_date).localeCompare(String(y.due_date)));
@@ -223,6 +225,7 @@ async function cashPosition(): Promise<Result> {
   return reply({
     refreshed,
     ...(refreshed ? {} : { note: "Paystack couldn't be reached, so these figures are from the Sheet and may miss recent payments." }),
+    just_paid: justPaid,
     owed_to_us: {
       total: sumNaira(stillOwed),
       overdue_total: sumNaira(overdue),

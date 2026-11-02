@@ -53,4 +53,4 @@ enough. I'll pay it as soon as it's ticked." Don't offer to split it into smalle
 
 Stop. Don't record or pay to the new account. "Changed bank details are the most common invoice scam, so
 I've held this for the owner to confirm with Mama Nkechi directly, by phone, not WhatsApp. Her current
-details stay in place until then." Then tell the owner.
+details stay in place until then. Please let the owner know."
