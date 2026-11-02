@@ -53,6 +53,12 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
   "unknown": the reply tells the agent to run `check_status`, and the next `pay_supplier` verifies the stored
   reference first. Paystack errors `insufficient_balance`, `transfer_unavailable` and
   `duplicate_transfer_reference` become plain sentences; the last one is followed by a verify.
+- Any other 4xx from `POST /transfer` means Paystack refused it and nothing was sent; it comes back as a refusal.
+  The reference stays on the row, so the next attempt finds "not found" and reuses it. A 5xx, a timeout or a network
+  error is "unknown", as above.
+- Two calls for the same invoice at once both write the same reference; Paystack accepts one and refuses the other
+  as a duplicate, which then verifies and reports the first. Two different invoices at once can both pass the daily
+  limit check; at one business's volume that is accepted and noted in code.
 - Replies show the account masked (`GTBank ••••4821`).
 
 **`check_status`** `{invoice_id}`
@@ -67,6 +73,10 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
   including the half-finished cases. The fake Sheet rejects writes to the protected `approved` column, as the real
   one does.
 - Split across two PRs: the four tools that don't move money, then `pay_supplier` on its own.
+- The owner's tick approves the row as it reads when `pay_supplier` runs. If someone with edit access changes
+  `amount_ngn` after the tick, the new amount is paid. Before go-live, staff get view-only access to the Sheet, or
+  the owner protects columns A:M so only the owner and the service account can edit them (the service account
+  must stay an editor there, or every new row is refused).
 
 ## Alternatives considered
 - Creating the payment request before writing the Ledger (this ADR's first draft): when the Sheet then failed, as

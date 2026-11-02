@@ -2,13 +2,16 @@
 import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { test } from "node:test";
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { registerTools } from "../lib/tools.js";
 
 const dir = new URL("../skill/", import.meta.url);
 const skill = readFileSync(new URL("SKILL.md", dir), "utf8");
 const references = readdirSync(new URL("references/", dir)).map((f) => readFileSync(new URL(`references/${f}`, dir), "utf8"));
 
-// The tools the MCP server will register. When lib/tools.ts exists, this list moves there and the test imports it.
-const TOOLS = ["record_invoice", "cash_position", "chase_debtor", "pay_supplier", "check_status"];
+// The tools the MCP server registers, read off the server itself.
+const TOOLS: string[] = [];
+registerTools({ registerTool: (name: string) => TOOLS.push(name) } as unknown as McpServer);
 
 test("frontmatter has a kebab-case name and a description that says when to use it", () => {
   const front = skill.match(/^---\nname: ([a-z0-9-]+)\ndescription: (.+)\n---\n/);
@@ -29,6 +32,7 @@ test("fits Chord's 64,000-character skill budget with room to spare", () => {
 });
 
 test("names every tool, so the agent knows each one exists", () => {
+  assert.equal(TOOLS.length, 5);
   for (const tool of TOOLS) assert.ok(skill.includes(`\`${tool}\``), `SKILL.md never mentions ${tool}`);
 });
 
