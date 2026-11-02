@@ -175,7 +175,7 @@ test("record_invoice OUT: a new supplier's account is resolved, saved and shown 
   assert.equal(data.new_bank_details, true);
   assert.ok(!JSON.stringify(data).includes("0123454821"), "the full account number never goes back to chat");
   assert.deepEqual(sheet.rows("Parties")[0], { ...supplier, phone: "", email: "", recipient_code: "RCP_1" });
-  assert.equal(sheet.rows("Ledger")[0]!.recipient_code, "", "set when a transfer is made, not before");
+  assert.equal(sheet.rows("Ledger")[0]!.recipient_code, "RCP_1", "the account this invoice is for");
 });
 
 test("record_invoice OUT: different bank details for a known supplier are refused as possible fraud", async () => {
@@ -571,6 +571,7 @@ test("pay_supplier and check_status never mark an invoice paid from a transfer t
       const { data } = await call(tool, { invoice_id });
       assert.equal(data.status, "check", `${tool} ${invoice_id}`);
       assert.match(data.detail, /owner should check/);
+      assert.doesNotMatch(data.detail, /paid anything|nothing was sent/i, "money may have moved; never say it didn't");
     }
     assert.equal(ledgerRow(invoice_id).status, "open");
   }
@@ -586,6 +587,7 @@ test("pay_supplier: a transfer status it can't read stops the payout and says wh
 
   assert.equal(data.status, "check");
   assert.match(data.detail, /Paystack dashboard/);
+  assert.match(data.detail, /chopiefy-out-0057-2/, "the owner's way out once the dashboard shows no money left");
   assert.equal(Object.keys(paystack.transfers).length, 1);
 });
 
@@ -606,6 +608,32 @@ test("pay_supplier: the owner's tick doesn't carry over to bank details changed 
 
   const { data } = await call("pay_supplier", { invoice_id: "OUT-0058" });
 
-  assert.match(data.refused, /changed since OUT-0058 was last sent/);
+  assert.match(data.refused, /changed since OUT-0058 was recorded/);
+  assert.equal(Object.keys(paystack.transfers).length, 1);
+});
+
+test("pay_supplier: bank details changed in Parties after the invoice was recorded aren't paid on the owner's tick", async () => {
+  scene();
+  const { data: recorded } = await call("record_invoice", { direction: "OUT", party: "Mama Nkechi", amount_ngn: 150000, description: "Rice", due_date: "2026-11-06" });
+  const parties = sheet.tabs.Parties.find((r) => r[0] === "Mama Nkechi")!;
+  const at = (c: (typeof COLUMNS.Parties)[number]) => COLUMNS.Parties.indexOf(c);
+  [parties[at("bank_code")], parties[at("account_number")], parties[at("recipient_code")]] = ["999992", "0987650011", paystack.recipient("999992", "0987650011")];
+  setCell(recorded.id, "approved", true); // over the per-payment limit, ticked by the owner
+
+  const { data } = await call("pay_supplier", { invoice_id: recorded.id });
+
+  assert.match(data.refused, /changed since/);
+  assert.deepEqual(paystack.transfers, {});
+});
+
+test("pay_supplier: if Paystack calls the reference a duplicate and then can't be reached, the outcome is unknown", async () => {
+  scene();
+  transfer("chopiefy-out-0057-1", "success"); // sent by a call whose reply was lost before the Sheet heard
+  paystack.failures["GET /transfer/verify"] = "down";
+
+  const { isError, data } = await call("pay_supplier", { invoice_id: "OUT-0057" });
+
+  assert.equal(isError, true);
+  assert.match(data, /check_status/);
   assert.equal(Object.keys(paystack.transfers).length, 1);
 });

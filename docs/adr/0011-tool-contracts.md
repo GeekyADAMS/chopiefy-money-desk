@@ -47,8 +47,9 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
   stop; `failed`/`reversed` → the next attempt number; "not found" → Paystack never saw it, so the same reference is
   reused (Paystack would refuse a real duplicate anyway).
 - The Parties recipient is fetched from Paystack and must match the row's bank code and account number. If the
-  row's `recipient_code` (from an earlier attempt) differs from the party's, the details changed after the owner
-  ticked it, so it is refused until the owner clears the row's `recipient_code`.
+  row's `recipient_code` (written by `record_invoice`, then by each attempt) differs from the party's, the details
+  changed after the invoice was recorded and perhaps ticked, so it is refused until the owner confirms by phone and
+  clears the row's `recipient_code`.
 - `payoutDecision` gets: today's total (paid today in Lagos plus every open OUT row with a reference, which
   over-counts on purpose), bank details verified (an earlier paid OUT row to the same recipient), and the owner's
   tick.
@@ -69,7 +70,9 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
   the stored reference lets the next call record it.
 - `otp` means Paystack is waiting for the account owner's OTP, so OTP must be off on the Paystack account the
   server uses. Statuses we can't read as paid or failed (`abandoned`, `rejected`, `blocked`) stop as `check` until
-  Paystack documents whether money left the balance; its docs pages refused us (HTTP 403) on 2026-11-02.
+  Paystack documents whether money left the balance; its docs pages refused us (HTTP 403) on 2026-11-02. The
+  reply names the way out: once the dashboard shows no money left, the owner types the next attempt's reference
+  into `paystack_code`, which Paystack has never seen, so the next `pay_supplier` sends it.
 - Replies show the account masked (`GTBank ••••4821`).
 
 **`check_status`** `{invoice_id}`
@@ -86,8 +89,9 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
 - Split across two PRs: the four tools that don't move money, then `pay_supplier` on its own.
 - The owner's tick approves the row as it reads when `pay_supplier` runs. If someone with edit access changes
   `amount_ngn` after the tick, the new amount is paid. Before go-live, staff get view-only access to the Sheet, or
-  the owner protects columns A:M so only the owner and the service account can edit them (the service account
-  must stay an editor there, or every new row is refused).
+  the owner protects Ledger A:M and the Parties tab so only the owner and the service account can edit them (the
+  service account must stay an editor there, or every new row is refused). The same goes for `recipient_code` and
+  `paystack_code`: the checks above stop honest mistakes, not someone with edit access who means harm.
 
 ## Alternatives considered
 - Creating the payment request before writing the Ledger (this ADR's first draft): when the Sheet then failed, as

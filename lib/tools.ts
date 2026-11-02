@@ -160,6 +160,7 @@ async function linkInvoice(bill: Bill, name: string, phone: Cell, email: string,
 
 async function recordSupplierInvoice(a: RecordArgs, ledger: Invoice[], party: Party | undefined, name: string, now: Date): Promise<Result> {
   let details: { account: string; account_name: Cell; new_bank_details: boolean };
+  let recipientCode: Cell;
   if (party) {
     if (party.kind !== "supplier") return refuse(`${name} is a customer, not a supplier.`);
     const bank = a.bank ? await findBank(a.bank) : undefined;
@@ -168,6 +169,7 @@ async function recordSupplierInvoice(a: RecordArgs, ledger: Invoice[], party: Pa
       return refuse(`Those bank details are different from the ones on file for ${name}. Changed bank details are how most ` +
         `invoice fraud happens, so I haven't recorded this. The owner should confirm with ${name} by phone and update the Parties tab.`);
     }
+    recipientCode = party.recipient_code;
     details = { account: masked(await bankName(party.bank_code), party.account_number), account_name: party.account_name,
       new_bank_details: !bankDetailsVerified(ledger, party) };
   } else {
@@ -188,12 +190,14 @@ async function recordSupplierInvoice(a: RecordArgs, ledger: Invoice[], party: Pa
     });
     await addRow("Parties", { name, kind: "supplier", bank_code: bank.code, account_number: a.account_number,
       account_name: resolved.account_name, recipient_code: recipient.recipient_code });
+    recipientCode = recipient.recipient_code;
     details = { account: masked(bank.name, a.account_number), account_name: resolved.account_name, new_bank_details: true };
   }
 
   const id = nextId(ledger, "OUT");
+  // The account this invoice is for: pay_supplier refuses if Parties points somewhere else by the time it pays.
   await addRow("Ledger", { id, direction: "OUT", party: name, description: a.description, amount_ngn: a.amount_ngn,
-    due_date: a.due_date, status: "open", created_at: now.toISOString() });
+    due_date: a.due_date, status: "open", recipient_code: recipientCode, created_at: now.toISOString() });
   return reply({ id, ...details });
 }
 
@@ -317,7 +321,7 @@ async function settleTransfer(row: Invoice, reference: string, transfer: Transfe
   // A hand-edited reference or amount must never mark the wrong invoice paid, or record an amount Paystack didn't send.
   if (!reference.startsWith(`chopiefy-${id.toLowerCase()}-`) || (transfer.status === "success" && transfer.amount !== kobo(row))) {
     return { status: "check", detail: `Paystack's transfer ${reference} (${formatNaira(transfer.amount ?? 0)}, ${transfer.status}) doesn't match ` +
-      `${id} (${naira(row)}). I haven't changed the Sheet or paid anything. The owner should check ${id}'s amount and paystack_code.` };
+      `${id} (${naira(row)}). I haven't changed the Sheet. The owner should check ${id}'s amount and paystack_code.` };
   }
   let status: string;
   let detail: string;
@@ -334,8 +338,10 @@ async function settleTransfer(row: Invoice, reference: string, transfer: Transfe
   } else {
     // ponytail: statuses like abandoned, rejected or blocked stop here until a person looks. Treat them as ended once
     // Paystack documents whether money left the balance.
+    const next = transferReference(id, Number(reference.match(/-(\d+)$/)?.[1] ?? 0) + 1);
     return { status: "check", detail: `Paystack shows the transfer as "${transfer.status}", which I can't read as paid or failed, ` +
-      `so I won't pay again. The owner should check ${reference} in the Paystack dashboard.` };
+      `so I won't pay again. The owner should check ${reference} in the Paystack dashboard. If no money left, the owner can put ` +
+      `${next} in ${id}'s paystack_code to allow a new payment.` };
   }
   try {
     if (status === "paid") {
@@ -345,7 +351,7 @@ async function settleTransfer(row: Invoice, reference: string, transfer: Transfe
       row.status = status;
     }
   } catch (err) {
-    detail += ` The Sheet couldn't record this (${describe(err)}), so run check_status on ${id} later to save it.`;
+    detail += ` The Sheet couldn't record this (${err instanceof Error ? err.message : String(err)}), so run check_status on ${id} later to save it.`;
   }
   return { status, detail };
 }
@@ -380,9 +386,9 @@ async function paySupplier({ invoice_id }: { invoice_id: string }): Promise<Resu
 
   if (!party?.recipient_code) return refuse(`${row.party} has no bank details on file. Record their invoice with their bank and account number first.`);
   const changed = "Changed bank details are how most invoice fraud happens, so I haven't paid.";
-  // The owner's tick was given for the account the last attempt went to.
+  // The owner's tick was given for the account the invoice was recorded (or last sent) to.
   if (row.recipient_code && row.recipient_code !== party.recipient_code) {
-    return refuse(`${party.name}'s bank details changed since ${id} was last sent. ${changed} The owner should confirm the new ` +
+    return refuse(`${party.name}'s bank details changed since ${id} was recorded. ${changed} The owner should confirm the new ` +
       `account with the supplier by phone, then clear recipient_code on ${id} in the Ledger.`);
   }
   const recipient = await paystack<{ details: { bank_code: string; account_number: string } }>("GET", `/transferrecipient/${party.recipient_code}`);

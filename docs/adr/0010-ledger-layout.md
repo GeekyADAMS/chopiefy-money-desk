@@ -21,7 +21,7 @@ new, whether a payment is still in flight and whether a cash payment is verified
 | `due_date` | `YYYY-MM-DD` |
 | `status` | `open`, `part`, `paid`, `failed` or `reversed` |
 | `paystack_code` | IN: the payment request code (`PRQ_…`). OUT: the latest transfer reference (`chopiefy-out-0057-1`) |
-| `recipient_code` | OUT: the Paystack recipient a transfer went to |
+| `recipient_code` | OUT: the supplier's Paystack recipient when the invoice was recorded, then the one each transfer went to |
 | `last_chased` | When the last reminder link was issued (ISO time) |
 | `paid_at` | When Paystack says it was paid (ISO time). Only the server writes it |
 | `created_at` | When the row was recorded (ISO time) |
