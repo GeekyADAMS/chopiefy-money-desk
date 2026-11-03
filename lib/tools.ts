@@ -79,7 +79,7 @@ const masked = (bank: string, account: Cell) => `${bank} ••••${String(ac
 
 // ---------- tools ----------
 
-const amount = z.number().positive().max(1_000_000_000).refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, "At most 2 decimal places");
+const amount = z.number().min(0.01).max(1_000_000_000).refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, "At most 2 decimal places");
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").refine((s) => !Number.isNaN(Date.parse(s)), "Not a real date");
 const invoiceId = z.string().regex(/^(IN|OUT)-\d+$/i, "Like IN-0143 or OUT-0057").transform((s) => s.toUpperCase());
 
