@@ -21,6 +21,9 @@ the build. The exercise budget is about 6 hours, so every hour spent on infrastr
   shape. The endpoint is testable in-process with no server running (`test/mcp.test.ts`).
 - No memory between calls. Any state lives in the Sheet or Paystack (ADR 0004). This is a constraint we want.
 - No server-initiated messages or long streams. None of our tools needs them.
+- Added 2026-11-03: each request writes one JSON line to Vercel's logs (method, tool, status, time, client), never
+  the arguments, which hold names, amounts and bank details. The first Chord test turn left no trace on our side,
+  and without this we couldn't tell whether Chord had called us at all.
 - Cold starts add latency to the first call. Keep module-load work light (no client construction or network calls
   at import time).
 - Ceiling: the function's time limit. A tool call must finish well inside it, so each tool makes a small, bounded
