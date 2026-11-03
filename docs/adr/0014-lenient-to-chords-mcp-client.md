@@ -22,8 +22,9 @@ proves nothing.
 ## Decision
 - `api/mcp.ts` always passes `Accept: application/json, text/event-stream` to the transport. Replies are JSON
   anyway (`enableJsonResponse`).
-- `tools/list` replies drop `$schema` and `format`. The amount is declared `min(0.01)`, which with the two-decimal
-  rule is the same as "positive", and shows as `minimum` instead of `exclusiveMinimum`.
+- `tools/list` replies drop the `$schema` and `format` keywords, but not parameters of those names. The amount is
+  declared `min(0.01)`, shown as `minimum` instead of `exclusiveMinimum`. This is stricter than "positive" was: it
+  also refuses amounts like 0.000000001 that passed the two-decimal check and became 0 kobo.
 - The request log line also records the client's `accept` and `mcp-protocol-version` headers.
 
 ## Consequences

@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { after, mock, test } from "node:test";
 import { LATEST_PROTOCOL_VERSION } from "@modelcontextprotocol/sdk/types.js";
-import { GET, POST } from "../api/mcp.js";
+import { GET, plain, POST } from "../api/mcp.js";
 
 const TOKEN = "test-token";
 process.env.MCP_TOKEN = TOKEN;
@@ -75,6 +75,9 @@ test("logs one line per request: method, tool and status as short strings, never
   assert.deepEqual(lines.map((l) => [l.rpc, l.tool, l.status]),
     [[undefined, undefined, 401], ["tools/call", "no_such_tool", 200], [undefined, undefined, 400], [undefined, undefined, 400], ["x".repeat(60), undefined, 200]]);
   assert.doesNotMatch(JSON.stringify(lines), new RegExp(`0123456789|${TOKEN}|Bearer`));
+  // What the client sent, not the Accept the server forces, so Chord's real headers show in the log.
+  assert.equal(lines[1].accept, "application/json, text/event-stream");
+  assert.equal(lines[1].proto, undefined);
 });
 
 const call = (method: string, accept: string | null) =>
@@ -102,4 +105,23 @@ test("advertises tool schemas without $schema or format, keeping the rules the m
   assert.equal(record.amount_ngn.minimum, 0.01);
   assert.ok(record.email.pattern, "email keeps its pattern");
   assert.deepEqual(record.direction.enum, ["IN", "OUT"]);
+});
+
+test("cleaning schemas keeps a parameter whose name is a dropped keyword", () => {
+  const schema = { $schema: "x", type: "object", properties: { format: { type: "string", format: "email" }, properties: { type: "object", properties: { $schema: { type: "string" } } } }, required: ["format"] };
+  assert.deepEqual(plain(schema), { type: "object", properties: { format: { type: "string" }, properties: { type: "object", properties: { $schema: { type: "string" } } } }, required: ["format"] });
+});
+
+test("an amount that rounds to 0 kobo is refused before any tool code runs", async () => {
+  for (const amount_ngn of [1e-9, 0.005, 0]) {
+    const res = await POST(new Request("http://localhost/api/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${TOKEN}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "record_invoice",
+        arguments: { direction: "IN", party: "Mrs Test", amount_ngn, description: "Test", due_date: "2026-11-10" } } }),
+    }));
+    const { result } = (await res.json()) as { result: { isError?: boolean; content: { text: string }[] } };
+    assert.equal(result.isError, true, `accepted ${amount_ngn}`);
+    assert.match(result.content[0].text, /amount_ngn/);
+  }
 });

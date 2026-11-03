@@ -43,9 +43,11 @@ const BOTH = "application/json, text/event-stream";
 // Model providers differ in the JSON Schema they take for a tool (Gemini, for one, refuses "$schema" and string
 // formats). These keywords only guide the model: the server still checks every argument against the full zod schema.
 const UNSUPPORTED = new Set(["$schema", "format"]);
-const plain = (v: unknown): unknown =>
-  Array.isArray(v) ? v.map(plain)
-  : v && typeof v === "object" ? Object.fromEntries(Object.entries(v).filter(([k]) => !UNSUPPORTED.has(k)).map(([k, x]) => [k, plain(x)]))
+// Under "properties" the keys are parameter names, not keywords, so a parameter called "format" is kept.
+export const plain = (v: unknown, names = false): unknown =>
+  Array.isArray(v) ? v.map((x) => plain(x))
+  : v && typeof v === "object"
+    ? Object.fromEntries(Object.entries(v).filter(([k]) => names || !UNSUPPORTED.has(k)).map(([k, x]) => [k, plain(x, !names && k === "properties")]))
   : v;
 
 async function handle(original: Request, rpc?: string): Promise<Response> {
@@ -61,6 +63,7 @@ async function handle(original: Request, rpc?: string): Promise<Response> {
   });
   await server.connect(transport);
   const response = await transport.handleRequest(request);
+  // A JSON-RPC batch (an array, dropped from the protocol in 2025-06-18) has no single method and isn't cleaned.
   if (rpc !== "tools/list" || response.status !== 200) return response;
   const body = (await response.json()) as { result?: { tools?: { inputSchema: unknown }[] } };
   for (const tool of body.result?.tools ?? []) tool.inputSchema = plain(tool.inputSchema);
