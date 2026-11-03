@@ -3,6 +3,7 @@
 // protected column, and Paystack refuses a reused transfer reference.
 import { generateKeyPairSync } from "node:crypto";
 import { mock } from "node:test";
+import { POST } from "../api/mcp.js";
 import { COLUMNS, type Cell, type Tab } from "../lib/sheet.js";
 
 type Json = Record<string, any>;
@@ -184,4 +185,20 @@ export function fakeWorld() {
     throw new Error(`fakeWorld: unexpected fetch ${url}`);
   });
   return { sheet, paystack };
+}
+
+// One tool call through the real MCP endpoint, with the MCP_TOKEN in the environment. Refusals come back as data.
+let rpcId = 0;
+export async function callTool(name: string, args: Json = {}): Promise<{ isError: boolean; data: any }> {
+  const res = await POST(
+    new Request("http://localhost/api/mcp", {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${process.env.MCP_TOKEN}` },
+      body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name, arguments: args } }),
+    }),
+  );
+  const json = (await res.json()) as Json;
+  if (json.error) return { isError: true, data: json.error.message };
+  const text = json.result.content[0].text as string;
+  return json.result.isError ? { isError: true, data: text } : { isError: false, data: JSON.parse(text) };
 }

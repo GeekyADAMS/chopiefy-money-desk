@@ -115,6 +115,14 @@ export async function addRow<T extends Tab>(tab: T, values: Partial<Record<Colum
   for (let attempt = 0; attempt < 3; attempt++) {
     const { values: ids = [] } = await sheets<{ values?: Cell[][] }>("GET", `/values/${tab}!A:A`);
     const row = ids.length + 1; // Google trims trailing empty rows, so this is the row below the last ID
+    // A tick left on an emptied row would approve whatever lands there next.
+    if (columns.length < COLUMNS[tab].length) {
+      const owned = `${tab}!${letter(columns.length)}${row}:${letter(COLUMNS[tab].length - 1)}${row}`;
+      const [ownerCells = []] = (await sheets<{ values?: Cell[][] }>("GET", `/values/${owned}?valueRenderOption=UNFORMATTED_VALUE`)).values ?? [];
+      if (ownerCells.includes(true)) {
+        throw new SheetError(`Row ${row} of the ${tab} has the owner's approval tick but no invoice. The owner should untick it, then try again.`, 409);
+      }
+    }
     const range = `${tab}!A${row}:${last}${row}`;
     await sheets("POST", "/values:batchUpdate", { valueInputOption: "RAW", data: [{ range, values: [cells] }] });
     const query = "valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING";

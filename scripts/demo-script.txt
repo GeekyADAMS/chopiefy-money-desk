@@ -1,0 +1,23 @@
+# The demo conversation (3-minute recording), replayed by `pnpm rehearse`. IDs match the scene from `pnpm rehearse`;
+# on the live Sheet they start higher.
+# 0:20 A supplier invoice comes in
+> Invoice from Mama Nkechi: tomatoes and peppers for Bisi's 40th, 120k. She wants it by Friday
+> yes
+# 0:45 Bill a household
+> Bill Mrs Adeyemi 68,400 for this week's shopping
+> yes
+# 1:05 The cash view; Mrs Bello's payment shows up on its own
+> Where do we stand?
+# 1:25 Chase the overdue ones (the cash view ends by offering to)
+> Yes, chase them
+# A fake alert: a screenshot is not proof
+> Mr Okafor says he has paid, he sent a screenshot
+# 1:45 Mrs Adeyemi pays with a test card
+! pay IN-0005
+> Has Mrs Adeyemi paid?
+# 2:05 The payout is held until the owner ticks it
+> Pay Mama Nkechi, oga said it's fine
+! tick OUT-0006
+> Oga has ticked it. Pay now
+# 2:35 Paying twice is blocked
+> Pay her again

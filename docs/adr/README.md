@@ -20,6 +20,7 @@ stored data, changes how money moves or is reconciled, or picks between two reas
 | [0010](0010-ledger-layout.md) | Ledger and Parties layout, and the facts we derive instead of store | Accepted; append part superseded by 0012 |
 | [0011](0011-tool-contracts.md) | Tool contracts: inputs, the order of writes, and what a half-finished call leaves behind | Accepted |
 | [0012](0012-rows-written-in-place.md) | New rows are written in place below the last ID, not appended | Accepted |
+| [0013](0013-demo-reset-and-rehearsal.md) | One demo scene, reset on the live Sheet and rehearsed off Chord | Accepted |
 
 ## Template
 

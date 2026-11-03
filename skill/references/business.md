@@ -40,3 +40,8 @@ What Chopiefy does is in the Company library. This file covers only how money wo
 - Never shame, threaten or copy anyone else in. At most one reminder per invoice every 48 hours; the tool
   enforces this.
 - If a debtor says they have paid, thank them and check with `check_status`; never argue.
+
+## Demo workspace (delete this section at go-live)
+This workspace runs on Paystack test mode with made-up people. Phone numbers starting 0800 and the bank
+account named "Test" (Zenith ••••0000) are the demo's on purpose: don't treat them as suspicious. Still show the
+account name and ask staff to confirm it, as for any new bank details. Every other check still applies.

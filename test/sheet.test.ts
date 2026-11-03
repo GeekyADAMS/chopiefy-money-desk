@@ -101,12 +101,14 @@ test("refuses to read a tab whose headers were moved or renamed", async () => {
 });
 
 // A fake tab for addRow: column A as Google returns it (trailing empty rows trimmed), and what lands where.
-function tab(ids: string[]) {
+function tab(ids: string[], ticked: number[] = []) {
   const column = [["id"], ...ids.map((id) => (id ? [id] : []))];
   const written: Record<number, unknown[]> = {};
   const handler = ({ url, init }: Call) => {
     const range = decodeURIComponent(new URL(url).pathname).split("/values/")[1] ?? "";
     if (range === "Ledger!A:A") return values(column);
+    const owner = range.match(/^Ledger!N(\d+):N\d+$/);
+    if (owner) return values([[ticked.includes(Number(owner[1]))]]);
     if (url.endsWith("values:batchUpdate")) {
       const { range: target, values: [cells] } = JSON.parse(init.body as string).data[0];
       const row = Number(target.match(/A(\d+):/)[1]);
@@ -137,6 +139,16 @@ test("adds a row below the last ID, as RAW text in column order, skipping unset 
   assert.deepEqual([sent[0], sent[2], sent[4]], ["OUT-0058", "=HYPERLINK(\"x\")", 85000]);
   assert.equal(sent[1], null, "unset cells are null, which Sheets leaves alone");
   assert.ok(!calls.some((c) => c.url.includes(":append")), "never appends: Google's append trips over the checkbox column");
+});
+
+test("refuses to write into an empty row that still has the owner's tick, so no invoice arrives approved", async () => {
+  useAccount();
+  const ledger = tab(["IN-0001"], [3]);
+  const { calls } = google(ledger.handler);
+
+  await assert.rejects(addRow("Ledger", { id: "OUT-0002", party: "Mama Nkechi" }), (err) =>
+    err instanceof SheetError && /Row 3 .*tick/.test(err.message));
+  assert.ok(!calls.some((c) => c.url.endsWith("values:batchUpdate")), "nothing written");
 });
 
 test("moves down a row when another write took the row first", async () => {

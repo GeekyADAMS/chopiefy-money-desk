@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
 import { POST } from "../api/mcp.js";
 import { COLUMNS } from "../lib/sheet.js";
-import { fakeWorld, type FakePaystack, type FakeSheet } from "./fakes.js";
+import { callTool as call, fakeWorld, type FakePaystack, type FakeSheet } from "./fakes.js";
 
 type Json = Record<string, any>;
 const TOKEN = "tools-test-token";
@@ -22,20 +22,6 @@ afterEach(() => {
   mock.timers.reset();
   mock.restoreAll();
 });
-
-async function call(name: string, args: Json = {}): Promise<{ isError: boolean; data: any }> {
-  const res = await POST(
-    new Request("http://localhost/api/mcp", {
-      method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json, text/event-stream", authorization: `Bearer ${TOKEN}` },
-      body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name, arguments: args } }),
-    }),
-  );
-  const json = (await res.json()) as Json;
-  if (json.error) return { isError: true, data: json.error.message };
-  const text = json.result.content[0].text as string;
-  return json.result.isError ? { isError: true, data: text } : { isError: false, data: JSON.parse(text) };
-}
 
 const household = { name: "Mrs Adeyemi", kind: "household", phone: "0803 000 0001", email: "" };
 const supplier = { name: "Mama Nkechi", kind: "supplier", bank_code: "058", account_number: "0123454821", account_name: "NKECHI OKAFOR FOODS" };
@@ -264,6 +250,7 @@ test("cash_position: refreshes from Paystack, then totals what's owed both ways 
 
   assert.equal(data.refreshed, true);
   assert.equal(data.owed_to_us.total, "₦315,000", "Adeyemi's payment is taken out");
+  assert.deepEqual(data.just_paid, [{ id: "IN-0141", party: "Mrs Adeyemi", amount: "₦61,400" }], "and reported, so staff hear about it");
   assert.equal(data.owed_to_us.overdue_total, "₦295,000");
   assert.deepEqual(data.owed_to_us.overdue.map((i: Json) => [i.id, i.days_overdue]), [["IN-0140", 4], ["IN-0142", 2]], "oldest first");
   assert.deepEqual(data.we_owe_next_7_days.items.map((i: Json) => i.id), ["OUT-0057"]);
@@ -285,6 +272,7 @@ test("cash_position: says so when Paystack can't be reached, and still answers f
   assert.equal(isError, false);
   assert.equal(data.refreshed, false);
   assert.equal(data.owed_to_us.total, "₦376,400", "Adeyemi still counted: the Sheet hasn't heard");
+  assert.deepEqual(data.just_paid, []);
 });
 
 test("chase_debtor: reminds only who is overdue, unpaid and not chased in 48 hours", async () => {

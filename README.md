@@ -3,7 +3,7 @@
 A Chord teammate that records, tracks and settles every invoice in or out of Chopiefy from WhatsApp.
 This repo holds the MCP server that gives the teammate its tools. Paystack (test mode) moves the money and a Google Sheet keeps the books.
 
-Status: the MCP endpoint, the Paystack client and the test and quality gates are in place. The tools land after the Paystack probe.
+Status: all five tools are live on Vercel and registered in Chord. Next: the teammate on Chord and the WhatsApp demo.
 
 ## Layout
 
@@ -19,6 +19,9 @@ test/*.test.ts                      unit and in-process integration tests (no ne
 test/live/*.test.ts                 Paystack test-mode and Sheet contract tests (network, needs keys)
 scripts/probe-paystack.ts           calls every Paystack endpoint we depend on, saves raw responses
 scripts/setup-sheet.ts              lays out the Ledger and Parties tabs, safe to run again
+scripts/demo-scene.ts               the demo's starting state, made-up people (ADR 0013)
+scripts/reset-demo.ts               writes that scene to the live Sheet before each take
+scripts/rehearse.ts                 replays scripts/demo-script.txt off Chord: local endpoint, fakes, Claude Code headless
 docs/adr/                           architecture decision records, one per major decision
 .githooks/pre-push                  runs the secret scan and `pnpm verify` before every push
 .github/workflows/verify.yml        same gate in CI
@@ -37,6 +40,8 @@ pnpm test:live                  # Paystack test-mode and Sheet contract tests
 pnpm setup:sheet                # lay out the Sheet's tabs, then protect the approved column by hand
 pnpm probe:paystack             # Paystack test-mode probe, writes probe-output/
 pnpm dev                        # local server via the Vercel CLI, endpoint at /api/mcp
+pnpm rehearse                   # the demo conversation off Chord: no credits, no Paystack (needs the claude CLI)
+pnpm reset:demo                 # live Sheet back to the demo's start; untick every approval first
 ```
 
 Try the tools by hand with the MCP Inspector: `pnpm dlx @modelcontextprotocol/inspector`, transport "Streamable HTTP",
