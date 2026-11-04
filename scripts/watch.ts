@@ -32,7 +32,8 @@ const STATUS: Record<number, string> = {
 // The user-agent comes from any caller, even an unauthorised one, so control characters (terminal escapes) are
 // stripped before printing. "Chord" means "claims Chord's client": a user-agent can be faked.
 const clean = (s = "") => s.replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
-const who = (client = "") => (client.startsWith("Java-http-client") ? "Chord" : client.startsWith("curl") ? "A manual test (curl)" : client ? `A client (${client})` : "A client");
+const who = (client = "") => (client.startsWith("Java-http-client") ? "Chord" : client.startsWith("curl") ? "A manual test (curl)"
+  : client.startsWith("claude-code") ? "The rehearsal (Claude Code standing in for Chord)" : client ? `A client (${client})` : "A client");
 
 /** One plain-English line for one request log line, or undefined if it isn't ours. */
 export function explain(l: Line): string | undefined {

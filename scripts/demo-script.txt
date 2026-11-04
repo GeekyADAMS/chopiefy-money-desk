@@ -4,7 +4,7 @@
 > Invoice from Mama Nkechi: tomatoes and peppers for Bisi's 40th, 120k. She wants it by Friday
 > yes
 # 0:45 Bill a household
-> Bill Mrs Adeyemi 68,400 for this week's shopping
+> That's her account. Now bill Mrs Adeyemi 68,400 for this week's shopping
 > yes
 # 1:05 The cash view; Mrs Bello's payment shows up on its own
 > Where do we stand?
@@ -18,6 +18,7 @@
 # 2:05 The payout is held until the owner ticks it
 > Pay Mama Nkechi, oga said it's fine
 ! tick OUT-0006
-> Oga has ticked it. Pay now
+# If the teammate asks to confirm before paying, reply "yes" (live takes only; runs differ)
+> Oga has ticked it. Yes, pay her the 120k to Zenith 0000
 # 2:35 Paying twice is blocked
 > Pay her again

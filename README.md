@@ -3,7 +3,9 @@
 A Chord teammate that records, tracks and settles every invoice in or out of Chopiefy from WhatsApp.
 This repo holds the MCP server that gives the teammate its tools. Paystack (test mode) moves the money and a Google Sheet keeps the books.
 
-Status: all five tools are live on Vercel and registered in Chord. Next: the teammate on Chord and the WhatsApp demo.
+Status: all five tools are live on Vercel and registered in Chord, and the Money Desk teammate runs our skill on Chord.
+Chord turns currently stop inside Chord with a billing-settlement error before any tool is called (field notes), so
+the end-to-end WhatsApp run waits on a fix from TSG Labs. The owner's go-live note is [docs/go-live.md](docs/go-live.md).
 
 ## Layout
 
@@ -21,7 +23,7 @@ scripts/probe-paystack.ts           calls every Paystack endpoint we depend on, 
 scripts/setup-sheet.ts              lays out the Ledger and Parties tabs, safe to run again
 scripts/demo-scene.ts               the demo's starting state, made-up people (ADR 0013)
 scripts/reset-demo.ts               writes that scene to the live Sheet before each take
-scripts/rehearse.ts                 replays scripts/demo-script.txt off Chord: local endpoint, fakes, Claude Code headless
+scripts/rehearse.ts                 replays scripts/demo-script.txt off Chord with Claude Code headless (fakes, or --live)
 scripts/watch.ts                    explains each live call from Chord as it happens; keeps a copy in probe-output/calls.log
 docs/adr/                           architecture decision records, one per major decision
 .githooks/pre-push                  runs the secret scan and `pnpm verify` before every push
@@ -42,6 +44,7 @@ pnpm setup:sheet                # lay out the Sheet's tabs, then protect the app
 pnpm probe:paystack             # Paystack test-mode probe, writes probe-output/
 pnpm dev                        # local server via the Vercel CLI, endpoint at /api/mcp
 pnpm rehearse                   # the demo conversation off Chord: no credits, no Paystack (needs the claude CLI)
+pnpm rehearse --live            # the same against production: real Sheet, Paystack test mode, you tick and pay
 pnpm watch                      # every call to the live server as it happens, in plain English (needs the vercel CLI)
 pnpm reset:demo                 # live Sheet back to the demo's start; untick every approval first
 ```
@@ -53,6 +56,33 @@ URL `http://localhost:3000/api/mcp`, header `Authorization: Bearer <MCP_TOKEN>`.
 
 Docs first, then tests, then code. Major decisions get an ADR in `docs/adr/`. Every push passes `pnpm verify`,
 and agents also run the `verify-and-review` skill. The full rules are in [CLAUDE.md](CLAUDE.md).
+
+## How AI tools were used
+
+- **Claude Code wrote most of the code, tests, ADRs and docs, working with me.** I chose the business, the scope
+  and every trade-off, set up the accounts (Paystack, Google Cloud, Vercel, Chord), locked the Sheet, and reviewed
+  and merged every pull request. [CLAUDE.md](CLAUDE.md) holds the rules it worked to.
+- **A review gate before every push.** Claude Code agents ran the `verify-and-review` skill: typecheck, tests and a
+  fresh review of the diff. The "gate fixes" commits are what those reviews found.
+- **Rehearsals without Chord credits.** `pnpm rehearse` runs Claude Code headless as a stand-in teammate, with our
+  skill as its only prompt and our five tools as its only tools. It caught wording and script problems before any
+  credits were spent.
+- **Planning in Claude Docs:** the build plan, decision log, field notes and the owner's operating manual.
+- The teammate itself is built and run on Chord, as the brief requires. No AI tool can approve a payment: new bank
+  details, or anything over a limit, waits for the owner's tick, and the server enforces that.
+
+## With more time
+
+- **Tell the teammate when the owner ticks.** Today staff message it again after the tick. A Sheets trigger or a
+  Chord schedule could do that instead.
+- **A Paystack webhook,** so a payment lands in the Sheet the moment it's made, not when someone asks.
+- **Pass the staff member's ID into tool calls** (TSG says Chord can add it), so the Ledger records who asked.
+- **A morning brief** from a Chord schedule: yesterday's payments, today's overdue and the approvals waiting.
+- **A Chord escalation rule** for "the supplier changed their bank details". Today the tool refuses and the skill
+  tells staff to stop and phone.
+- **A lock** around new invoice IDs and the daily-limit check. Two requests at the same instant could clash.
+- **Invoices from photos,** once the simulator accepts images.
+- **A household-facing teammate** on its own endpoint, with only "what do I owe" and the pay link.
 
 ## Deploy
 
