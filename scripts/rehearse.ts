@@ -79,6 +79,7 @@ async function production(): Promise<Desk> {
   const url = "https://chopiefy-money-desk.vercel.app/api/mcp";
   const check = await fetch(url, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json",
     accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
+  await check.body?.cancel();
   if (check.status !== 200) stop(`Production answered HTTP ${check.status} to the token in .env.local; check MCP_TOKEN`);
   // The script's IDs come from the local scene. They start higher on the live Sheet, so the person finds the row.
   // A fresh readline per pause, closed after it, so Ctrl-C stops the run during a pause and between them.
@@ -102,6 +103,7 @@ const cwd = mkdtempSync(join(tmpdir(), "rehearse-")); // away from the repo's CL
 // The token goes in a private file, never on claude's command line, where ps or an error message would show it.
 const mcp = join(cwd, "mcp.json");
 process.on("exit", () => rmSync(cwd, { recursive: true, force: true })); // the token file goes with the run
+process.on("SIGINT", () => process.exit(130)); // so Ctrl-C mid-turn still runs the cleanup above
 writeFileSync(mcp, JSON.stringify({ mcpServers: { desk: { type: "http", url: desk.url, headers: { authorization: `Bearer ${desk.token}` } } } }), { mode: 0o600 });
 const today = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date());
 // ponytail: Chord's own prompt and date handling are unknown; the first real run tells us what to change here.
