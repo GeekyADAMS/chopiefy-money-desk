@@ -625,3 +625,16 @@ test("pay_supplier: if Paystack calls the reference a duplicate and then can't b
   assert.match(data, /check_status/);
   assert.equal(Object.keys(paystack.transfers).length, 1);
 });
+
+test("the request log says how each tool call went (done, refused or error), never its text", async () => {
+  const log = mock.method(console, "log", () => {});
+  await call("cash_position");
+  await call("check_status", { invoice_id: "IN-9999" });
+  await call("check_status", { invoice_id: "not-an-id" });
+  await call("no_such_tool");
+  log.mock.restore();
+  const lines = log.mock.calls.map((c) => JSON.parse(String(c.arguments[0])));
+  assert.deepEqual(lines.map((l) => [l.tool, l.outcome]),
+    [["cash_position", undefined], ["check_status", "refused"], ["check_status", "error"], ["no_such_tool", "error"]]);
+  assert.doesNotMatch(JSON.stringify(lines), /IN-9999|not-an-id|Ledger/);
+});

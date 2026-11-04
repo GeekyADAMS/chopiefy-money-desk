@@ -22,6 +22,7 @@ scripts/setup-sheet.ts              lays out the Ledger and Parties tabs, safe t
 scripts/demo-scene.ts               the demo's starting state, made-up people (ADR 0013)
 scripts/reset-demo.ts               writes that scene to the live Sheet before each take
 scripts/rehearse.ts                 replays scripts/demo-script.txt off Chord: local endpoint, fakes, Claude Code headless
+scripts/watch.ts                    explains each live call from Chord as it happens; keeps a copy in probe-output/calls.log
 docs/adr/                           architecture decision records, one per major decision
 .githooks/pre-push                  runs the secret scan and `pnpm verify` before every push
 .github/workflows/verify.yml        same gate in CI
@@ -41,6 +42,7 @@ pnpm setup:sheet                # lay out the Sheet's tabs, then protect the app
 pnpm probe:paystack             # Paystack test-mode probe, writes probe-output/
 pnpm dev                        # local server via the Vercel CLI, endpoint at /api/mcp
 pnpm rehearse                   # the demo conversation off Chord: no credits, no Paystack (needs the claude CLI)
+pnpm watch                      # every call to the live server as it happens, in plain English (needs the vercel CLI)
 pnpm reset:demo                 # live Sheet back to the demo's start; untick every approval first
 ```
 

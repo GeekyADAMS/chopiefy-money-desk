@@ -16,6 +16,7 @@
     "probe:paystack": "tsx --env-file-if-exists=.env.local scripts/probe-paystack.ts",
     "reset:demo": "tsx --env-file-if-exists=.env.local scripts/reset-demo.ts",
     "rehearse": "tsx scripts/rehearse.ts",
+    "watch": "tsx scripts/watch.ts",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {
