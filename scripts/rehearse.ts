@@ -8,12 +8,12 @@
 // paying by card, "#" is a comment.
 import { execFile } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, readFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createInterface } from "node:readline/promises";
-import { promisify } from "node:util";
+import { parseEnv, promisify } from "node:util";
 import { GET, POST } from "../api/mcp.js";
 import { COLUMNS } from "../lib/sheet.js";
 import { lagosDate } from "../lib/rules.js";
@@ -68,32 +68,45 @@ async function local(): Promise<Desk> {
 }
 
 async function production(): Promise<Desk> {
+  // Only the token is read: the other secrets in .env.local never reach this process's env, or the claude child's.
+  let token: string | undefined;
   try {
-    process.loadEnvFile(join(root, ".env.local"));
+    token = parseEnv(readFileSync(join(root, ".env.local"), "utf8")).MCP_TOKEN;
   } catch {
     stop("--live needs .env.local with the production MCP_TOKEN");
   }
-  const token = process.env.MCP_TOKEN || stop("--live needs MCP_TOKEN in .env.local (the token Chord uses)");
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  if (!token) stop("--live needs MCP_TOKEN in .env.local (the token Chord uses)");
+  const url = "https://chopiefy-money-desk.vercel.app/api/mcp";
+  const check = await fetch(url, { method: "POST", headers: { authorization: `Bearer ${token}`, "content-type": "application/json",
+    accept: "application/json, text/event-stream" }, body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/list" }) });
+  if (check.status !== 200) stop(`Production answered HTTP ${check.status} to the token in .env.local; check MCP_TOKEN`);
   // The script's IDs come from the local scene. They start higher on the live Sheet, so the person finds the row.
-  const wait = async (what: string) => void (await rl.question(`\n[${what}. Press Enter when done.] `));
+  // A fresh readline per pause, closed after it, so Ctrl-C stops the run during a pause and between them.
+  const wait = async (what: string) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout }).on("SIGINT", () => process.exit(130));
+    await rl.question(`\n[${what}. Press Enter when done.] `);
+    rl.close();
+  };
   console.log("LIVE: the real Sheet and Paystack test mode. Run pnpm reset:demo first. Live IDs are higher than the script's.");
   return {
-    url: "https://chopiefy-money-desk.vercel.app/api/mcp",
+    url,
     token,
     tick: (id) => wait(`Owner: tick approved in the Sheet on the row the script calls ${id}`),
     pay: (id) => wait(`Payer: open the pay link for the invoice the script calls ${id} and pay with a Paystack test card`),
-    end: () => rl.close(),
+    end: () => {},
   };
 }
 
 const desk = process.argv.includes("--live") ? await production() : await local();
-const mcp = JSON.stringify({ mcpServers: { desk: { type: "http", url: desk.url, headers: { authorization: `Bearer ${desk.token}` } } } });
+const cwd = mkdtempSync(join(tmpdir(), "rehearse-")); // away from the repo's CLAUDE.md
+// The token goes in a private file, never on claude's command line, where ps or an error message would show it.
+const mcp = join(cwd, "mcp.json");
+process.on("exit", () => rmSync(cwd, { recursive: true, force: true })); // the token file goes with the run
+writeFileSync(mcp, JSON.stringify({ mcpServers: { desk: { type: "http", url: desk.url, headers: { authorization: `Bearer ${desk.token}` } } } }), { mode: 0o600 });
 const today = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date());
 // ponytail: Chord's own prompt and date handling are unknown; the first real run tells us what to change here.
 const system = [`It is now ${today}, Lagos time.`, file("skill/SKILL.md"), `# references/business.md\n${file("skill/references/business.md")}`,
   `# references/examples.md\n${file("skill/references/examples.md")}`].join("\n\n");
-const cwd = mkdtempSync(join(tmpdir(), "rehearse-")); // away from the repo's CLAUDE.md
 
 let session: string | undefined;
 let cost = 0;
@@ -108,7 +121,9 @@ for (const line of file(script).split("\n").map((l) => l.trim())) {
     const args = ["-p", line.slice(2), "--output-format", "stream-json", "--verbose", "--system-prompt", system, "--mcp-config", mcp,
       "--strict-mcp-config", "--tools", "", "--allowedTools", "mcp__desk", "--setting-sources", "project",
       ...(process.env.REHEARSE_MODEL ? ["--model", process.env.REHEARSE_MODEL] : []), ...(session ? ["--resume", session] : [])];
-    const { stdout } = await run("claude", args, { cwd, maxBuffer: 50_000_000 });
+    // On failure only claude's own stderr is shown: execFile's error message repeats the whole command line.
+    const { stdout } = await run("claude", args, { cwd, maxBuffer: 50_000_000 })
+      .catch((err: { stderr?: string }) => stop(`claude failed: ${err.stderr?.trim() || "no error output"}`));
     for (const event of stdout.split("\n").filter(Boolean).map((l) => JSON.parse(l))) {
       for (const block of event.message?.content ?? []) {
         if (event.type === "assistant" && block.type === "text") console.log(`AGENT: ${block.text}`);

@@ -68,8 +68,8 @@ and agents also run the `verify-and-review` skill. The full rules are in [CLAUDE
   skill as its only prompt and our five tools as its only tools. It caught wording and script problems before any
   credits were spent.
 - **Planning in Claude Docs:** the build plan, decision log, field notes and the owner's operating manual.
-- The teammate itself is built and run on Chord, as the brief requires. No AI tool can approve or send a payment:
-  the server enforces the rules and the owner's tick.
+- The teammate itself is built and run on Chord, as the brief requires. No AI tool can approve a payment: new bank
+  details, or anything over a limit, waits for the owner's tick, and the server enforces that.
 
 ## With more time
 
