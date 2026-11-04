@@ -26,6 +26,15 @@ proves nothing.
   declared `min(0.01)`, shown as `minimum` instead of `exclusiveMinimum`. This is stricter than "positive" was: it
   also refuses amounts like 0.000000001 that passed the two-decimal check and became 0 kobo.
 - The request log line also records the client's `accept` and `mcp-protocol-version` headers.
+- Added 2026-11-04: for `tools/call`, the log line also says how it went: `outcome: "refused"` (a business rule
+  said no) or `"error"` (bad input, an unknown tool, or the Sheet or Paystack failing). No outcome means done. Never
+  the text, which can hold names and amounts. `pnpm watch` turns these lines into plain English as they happen.
+
+## What we then saw (2026-11-04)
+Chord's own client (`Java-http-client/23.0.2`) sends both Accept types and skips `initialize`, going straight to
+`tools/list`; all its calls got HTTP 200. A third turn at 11:42 ended with the same billing-settlement banner and
+no request reached us, so the failed turns stop inside Chord. The changes here stay: they cost nothing and make
+the server easier on other clients.
 
 ## Consequences
 - These keywords only guide the model. The server still validates every argument against the full zod schema,

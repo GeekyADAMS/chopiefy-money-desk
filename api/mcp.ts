@@ -18,7 +18,7 @@ const short = (v: unknown) => (typeof v === "string" ? v.slice(0, 60) : undefine
 // arguments: they hold names, amounts and bank details. The body is read only once the token checks out.
 export async function POST(request: Request): Promise<Response> {
   const started = Date.now();
-  let call: { rpc?: string; tool?: string } = {};
+  let call: { rpc?: string; tool?: string; outcome?: "refused" | "error" } = {};
   let status = 500;
   try {
     if (!authorized(request)) {
@@ -29,6 +29,13 @@ export async function POST(request: Request): Promise<Response> {
     call = { rpc: short(body?.method), tool: short(body?.params?.name) };
     const response = await handle(request, call.rpc);
     status = response.status;
+    // A tool call answers HTTP 200 whatever happened, so log how it went: refused by a business rule ({ refused } in
+    // lib/tools.ts) or an error (isError, or a JSON-RPC error such as an unknown tool). Never the text itself.
+    if (call.rpc === "tools/call" && status === 200) {
+      const reply = (await response.clone().json().catch(() => null)) as { result?: { isError?: boolean; content?: { text?: string }[] }; error?: unknown } | null;
+      if (reply?.error || reply?.result?.isError) call.outcome = "error";
+      else if (/^\{"refused":/.test(reply?.result?.content?.[0]?.text ?? "")) call.outcome = "refused";
+    }
     return response;
   } finally {
     const h = (name: string) => short(request.headers.get(name));
