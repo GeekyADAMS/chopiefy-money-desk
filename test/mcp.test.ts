@@ -125,3 +125,13 @@ test("an amount that rounds to 0 kobo is refused before any tool code runs", asy
     assert.match(result.content[0].text, /amount_ngn/);
   }
 });
+
+test("logs a tool call that never reached a tool, such as one with no name, as an error", async () => {
+  const log = mock.method(console, "log", () => {});
+  try {
+    assert.equal((await call("tools/call", "application/json")).status, 200);
+  } finally {
+    log.mock.restore();
+  }
+  assert.equal(JSON.parse(String(log.mock.calls[0].arguments[0])).outcome, "error");
+});

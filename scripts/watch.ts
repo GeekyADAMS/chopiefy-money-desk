@@ -29,35 +29,46 @@ const STATUS: Record<number, string> = {
   500: "FAILED inside our server: read the Vercel log for the error",
 };
 
+// The user-agent comes from any caller, even an unauthorised one, so control characters (terminal escapes) are
+// stripped before printing. "Chord" means "claims Chord's client": a user-agent can be faked.
+const clean = (s = "") => s.replace(/[\u0000-\u001f\u007f-\u009f]/g, "?");
 const who = (client = "") => (client.startsWith("Java-http-client") ? "Chord" : client.startsWith("curl") ? "A manual test (curl)" : client ? `A client (${client})` : "A client");
 
 /** One plain-English line for one request log line, or undefined if it isn't ours. */
 export function explain(l: Line): string | undefined {
   if (l.status === undefined) return undefined;
   const took = l.ms === undefined ? "" : ` (${l.ms < 1000 ? `${l.ms} ms` : `${(l.ms / 1000).toFixed(1)} s`})`;
-  if (STATUS[l.status]) return `${who(l.client)} → ${l.rpc ?? "?"}: ${STATUS[l.status]}${took}`;
+  const by = who(clean(l.client));
+  if (STATUS[l.status]) return `${by} → ${clean(l.rpc ?? "?")}: ${STATUS[l.status]}${took}`;
   if (l.rpc === "tools/call") {
-    const what = TOOLS[l.tool ?? ""] ?? `an unknown tool "${l.tool}"`;
-    const outcome = l.outcome === "refused" ? "Refused by a business rule; the teammate was told why"
-      : l.outcome === "error" ? "Failed (bad input, or the Sheet or Paystack didn't answer); the teammate was told"
+    const what = TOOLS[l.tool ?? ""] ?? `an unknown tool "${clean(l.tool)}"`;
+    const outcome = l.outcome === "refused" ? "Refused (a business rule, or Paystack said no); the teammate was told why"
+      : l.outcome === "error" ? "Error or unknown outcome: read the teammate's reply (for pay_supplier, check_status comes first)"
       : "Done: the result went back to the teammate";
-    return `${who(l.client)} called ${l.tool}: ${what}. ${outcome}${took}`;
+    return `${by} called ${clean(l.tool)}: ${what}. ${outcome}${took}`;
   }
-  return `${who(l.client)} ${STEPS[l.rpc ?? ""] ?? `sent ${l.rpc}`}${took}`;
+  return `${by} ${STEPS[l.rpc ?? ""] ?? `sent ${clean(l.rpc)}`}${took}`;
 }
 
 const time = (ms: number) => new Date(ms).toLocaleTimeString("en-GB", { timeZone: "Africa/Lagos" });
 
+const HEARTBEATS = new Set([1, 5, 15, 30]);
+
 function stream(file: string) {
   let quietSince = Date.now();
+  let quickFailures = 0;
   const tick = setInterval(() => {
-    const mins = Math.floor((Date.now() - quietSince) / 60_000);
-    if (mins >= 1) console.log(`${time(Date.now())}  · no calls for ${mins} min`);
+    const mins = Math.round((Date.now() - quietSince) / 60_000);
+    if (HEARTBEATS.has(mins) || (mins > 0 && mins % 60 === 0)) console.log(`${time(Date.now())}  · no calls for ${mins} min`);
   }, 60_000);
   const run = () => {
-    const child = spawn("vercel", ["logs", "chopiefy-money-desk.vercel.app", "--json"], { stdio: ["ignore", "pipe", "ignore"] });
+    const started = Date.now();
+    const child = spawn("vercel", ["logs", "chopiefy-money-desk.vercel.app", "--json"], { stdio: ["ignore", "pipe", "pipe"] });
+    child.stdout.setEncoding("utf8");
     let rest = "";
-    child.stdout.on("data", (chunk: Buffer) => {
+    let errors = "";
+    child.stderr.on("data", (chunk: Buffer) => (errors = (errors + chunk).slice(-2000)));
+    child.stdout.on("data", (chunk: string) => {
       const lines = (rest + chunk).split("\n");
       rest = lines.pop()!;
       for (const raw of lines) {
@@ -72,7 +83,18 @@ function stream(file: string) {
         } catch {} // not one of our request lines
       }
     });
-    child.on("exit", run); // the CLI stops after 5 minutes
+    child.on("error", (err) => {
+      console.error(`Can't run the vercel CLI (${err.message}). Install it, run "vercel login", then "vercel link" in this folder.`);
+      process.exit(1);
+    });
+    // The CLI stops after 5 minutes, and a new run also picks up a new deployment. A run that ends within seconds
+    // means the CLI can't stream (logged out, not linked, offline): say so, instead of reporting "no calls".
+    child.on("exit", (code) => {
+      if (Date.now() - started > 10_000) return (quickFailures = 0), run();
+      console.error(`vercel logs stopped at once (exit ${code}):\n${errors.trim().split("\n").slice(-3).join("\n")}`);
+      if (++quickFailures >= 3) return console.error("Giving up: fix the vercel CLI and run pnpm watch again."), process.exit(1);
+      setTimeout(run, 5_000);
+    });
   };
   run();
   process.on("SIGINT", () => (clearInterval(tick), process.exit(0)));
@@ -86,7 +108,8 @@ When you send a message to Money Desk, a working turn looks like this:
   2. Chord calls that tool here: a "Chord called …" line appears within seconds.
   3. The result goes back, and the teammate writes its reply in Chord.
 If a turn ends in Chord with no "Chord called" line here, the turn stopped inside Chord before reaching us.
-Vercel's live stream can drop a line, so the dashboard's Logs tab (kept an hour) is the full record.
+Vercel's live stream can drop a line, so the dashboard's Logs tab (kept an hour) is the full record. After a
+redeploy, calls show here once the stream restarts (within 5 minutes).
 `);
   stream("probe-output/calls.log");
 }
