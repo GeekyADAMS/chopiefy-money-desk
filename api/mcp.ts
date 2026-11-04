@@ -27,15 +27,33 @@ export async function POST(request: Request): Promise<Response> {
     }
     const body = (await request.clone().json().catch(() => null)) as { method?: unknown; params?: { name?: unknown } } | null;
     call = { rpc: short(body?.method), tool: short(body?.params?.name) };
-    const response = await handle(request);
+    const response = await handle(request, call.rpc);
     status = response.status;
     return response;
   } finally {
-    console.log(JSON.stringify({ ...call, status, ms: Date.now() - started, client: short(request.headers.get("user-agent")) }));
+    const h = (name: string) => short(request.headers.get(name));
+    console.log(JSON.stringify({ ...call, status, ms: Date.now() - started, client: h("user-agent"), accept: h("accept"), proto: h("mcp-protocol-version") }));
   }
 }
 
-async function handle(request: Request): Promise<Response> {
+// Chord's docs say its client "accepts JSON or SSE responses"; the SDK answers 406 unless both are listed. Replies here
+// are always JSON (enableJsonResponse), so whatever the client lists, it gets JSON.
+const BOTH = "application/json, text/event-stream";
+
+// Model providers differ in the JSON Schema they take for a tool (Gemini, for one, refuses "$schema" and string
+// formats). These keywords only guide the model: the server still checks every argument against the full zod schema.
+const UNSUPPORTED = new Set(["$schema", "format"]);
+// Under "properties" the keys are parameter names, not keywords, so a parameter called "format" is kept.
+export const plain = (v: unknown, names = false): unknown =>
+  Array.isArray(v) ? v.map((x) => plain(x))
+  : v && typeof v === "object"
+    ? Object.fromEntries(Object.entries(v).filter(([k]) => names || !UNSUPPORTED.has(k)).map(([k, x]) => [k, plain(x, !names && k === "properties")]))
+  : v;
+
+async function handle(original: Request, rpc?: string): Promise<Response> {
+  const headers = new Headers(original.headers);
+  headers.set("accept", BOTH);
+  const request = new Request(original, { headers });
   // Serverless instances share no memory, so each request gets a fresh server and a stateless transport.
   const server = new McpServer({ name: "chopiefy-money-desk", version: "0.1.0" });
   registerTools(server);
@@ -44,7 +62,12 @@ async function handle(request: Request): Promise<Response> {
     enableJsonResponse: true,
   });
   await server.connect(transport);
-  return transport.handleRequest(request);
+  const response = await transport.handleRequest(request);
+  // A JSON-RPC batch (an array, dropped from the protocol in 2025-06-18) has no single method and isn't cleaned.
+  if (rpc !== "tools/list" || response.status !== 200) return response;
+  const body = (await response.json()) as { result?: { tools?: { inputSchema: unknown }[] } };
+  for (const tool of body.result?.tools ?? []) tool.inputSchema = plain(tool.inputSchema);
+  return Response.json(body);
 }
 
 // Stateless mode has no sessions or server-initiated streams to open or close.

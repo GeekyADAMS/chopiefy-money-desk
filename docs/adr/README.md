@@ -21,6 +21,7 @@ stored data, changes how money moves or is reconciled, or picks between two reas
 | [0011](0011-tool-contracts.md) | Tool contracts: inputs, the order of writes, and what a half-finished call leaves behind | Accepted |
 | [0012](0012-rows-written-in-place.md) | New rows are written in place below the last ID, not appended | Accepted |
 | [0013](0013-demo-reset-and-rehearsal.md) | One demo scene, reset on the live Sheet and rehearsed off Chord | Accepted |
+| [0014](0014-lenient-to-chords-mcp-client.md) | Lenient to Chord's MCP client: any Accept header, plain tool schemas | Accepted |
 
 ## Template
 
