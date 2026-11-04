@@ -12,6 +12,8 @@ test("explains each kind of request in plain English, naming Chord by its client
   assert.match(explain({ ...chord, rpc: "tools/call", tool: "check_status", outcome: "error" })!, /Error or unknown outcome.*check_status comes first/);
   assert.match(explain({ ...chord, rpc: "tools/call", tool: "nope" })!, /unknown tool "nope"/);
   assert.match(explain({ status: 401, client: "curl/8.7.1" })!, /^A manual test \(curl\) → \?: REFUSED: wrong or missing token/);
+  const rehearsal = { client: "claude-code/2.1.318 (t3-code, agent-sdk/0.3.284)", status: 200, rpc: "tools/call", tool: "cash_position" };
+  assert.match(explain(rehearsal)!, /^The rehearsal \(Claude Code standing in for Chord\) called cash_position/);
   assert.match(explain({ rpc: "initialize", status: 500 })!, /FAILED inside our server/);
   assert.equal(explain({}), undefined);
 });

@@ -11,7 +11,7 @@ are the way they are.
 - `pnpm setup:sheet`: lays out the Ledger and Parties tabs (ADR 0010); safe to run again.
 - `pnpm probe:paystack`: exercises every Paystack call we depend on and writes `probe-output/`.
 - `pnpm rehearse`: replays the demo conversation against the fakes with Claude Code headless. Use it before
-  spending Chord credits.
+  spending Chord credits. `--live` runs it against production (real Sheet, Paystack test mode) after `pnpm reset:demo`.
 - `pnpm reset:demo`: puts the live Sheet back to the demo's starting state (ADR 0013).
 - `pnpm watch`: streams every call to the production server in plain English, and says when none arrive. Run it
   beside any Chord turn.

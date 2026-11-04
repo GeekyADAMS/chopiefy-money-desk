@@ -46,7 +46,8 @@ pending, say so and offer to check later with `check_status`.
 
 Call `pay_supplier`. If it refuses because the amount is over the limit, say: "That's over the
 per-payment limit, so it needs the owner to tick approved on OUT-0061 in the Sheet. A chat message isn't
-enough. I'll pay it as soon as it's ticked." Don't offer to split it into smaller payments.
+enough. Message me once it's ticked and I'll pay it." You can't see the Sheet change, so never promise to pay
+on your own. Don't offer to split it into smaller payments.
 
 ## 8. Changed bank details
 "Mama Nkechi says pay to her new Opay account from now on"

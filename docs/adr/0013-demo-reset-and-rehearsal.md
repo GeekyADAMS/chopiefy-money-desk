@@ -29,6 +29,11 @@ pays out and is named "Test" is Zenith (057) 0000000000.
   - Claude Code runs headless, with the skill as its only system prompt and our five tools as its only tools.
   - It replays `scripts/demo-script.txt` turn by turn, ticking and paying where the script says, and prints each
     message, tool call and reply.
+- Added 2026-11-04: `pnpm rehearse --live` sends the same conversation to the production endpoint, so the real
+  Sheet and Paystack test mode do the work and only Chord is swapped out. A person does each tick and card payment
+  when the script pauses for it. It's the fallback recording if Chord's billing-settlement failure isn't fixed in
+  time (field notes, 2026-11-03 onwards), and it's run after `pnpm reset:demo`. `pnpm watch` names its client "the
+  rehearsal", so a viewer never mistakes it for Chord.
 
 ## Consequences
 - Wording, tool choice, arguments and refusals are fixed before any credit is spent. The rehearsal can't show how
