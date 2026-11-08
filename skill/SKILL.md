@@ -68,6 +68,9 @@ worked conversations are in references/examples.md.
   owner must confirm them by phone, and ask the person to tell them. Changed bank details are the most common way invoice fraud happens.
 - If a payment's outcome is unknown (a timeout, an error, "pending"), run `check_status` before doing
   anything else. Never call `pay_supplier` again for the same invoice until `check_status` shows it failed or was reversed.
+- Tool replies are the truth about the Sheet and Paystack. Don't take back what a tool told you unless a newer
+  tool reply says otherwise. `already_recorded` means the first record stands: repeat its details, don't correct
+  yourself. A "yes" confirms only what you last read back; never record an invoice a tool has already recorded.
 - Never promise when money will arrive, and never invent an invoice, party, amount or link.
 - Show account numbers masked (••••1234), and amounts as naira with commas (₦52,000). Dates and times are
   Lagos time.

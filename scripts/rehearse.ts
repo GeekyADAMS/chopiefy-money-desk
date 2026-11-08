@@ -106,7 +106,7 @@ process.on("exit", () => rmSync(cwd, { recursive: true, force: true })); // the 
 process.on("SIGINT", () => process.exit(130)); // so Ctrl-C mid-turn still runs the cleanup above
 writeFileSync(mcp, JSON.stringify({ mcpServers: { desk: { type: "http", url: desk.url, headers: { authorization: `Bearer ${desk.token}` } } } }), { mode: 0o600 });
 const today = new Intl.DateTimeFormat("en-GB", { timeZone: "Africa/Lagos", weekday: "long", day: "numeric", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date());
-// ponytail: Chord's own prompt and date handling are unknown; the first real run tells us what to change here.
+// Chord tells the model today's date (it got overdue days right on 6 Nov), so the stand-in is told too.
 const system = [`It is now ${today}, Lagos time.`, file("skill/SKILL.md"), `# references/business.md\n${file("skill/references/business.md")}`,
   `# references/examples.md\n${file("skill/references/examples.md")}`].join("\n\n");
 

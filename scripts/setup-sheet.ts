@@ -1,4 +1,4 @@
-/// Lays out the Ledger and Parties tabs (ADR 0010) in the Sheet named by SHEET_ID. Safe to run again:
+// Lays out the Ledger and Parties tabs (ADR 0010) in the Sheet named by SHEET_ID. Safe to run again:
 // it never overwrites a header row above real data, and the formatting it applies is the same every time.
 // Once the owner protects the approved column, nothing here touches that column again.
 // Run: pnpm setup:sheet
