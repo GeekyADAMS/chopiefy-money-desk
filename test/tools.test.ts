@@ -208,6 +208,21 @@ test("record_invoice OUT: a known supplier's details count as new until a payout
   assert.equal((await call("record_invoice", { ...bill, party: "Gas Man" })).data.new_bank_details, true, "never paid, as pay_supplier sees it");
 });
 
+test("record_invoice OUT: a retry returns the account details again, so the reply stands on its own", async () => {
+  scene();
+  const bill = { direction: "OUT", party: "Gas Man", amount_ngn: 1000, description: "x", due_date: "2026-11-06" };
+
+  const first = await call("record_invoice", bill);
+  const again = await call("record_invoice", bill);
+
+  assert.equal(again.data.already_recorded, true);
+  assert.deepEqual(
+    [again.data.id, again.data.account, again.data.account_name, again.data.new_bank_details],
+    [first.data.id, first.data.account, first.data.account_name, true],
+  );
+  assert.equal(sheet.rows("Ledger").filter((r) => r.party === "Gas Man").length, 2, "OUT-0058 and this one, not a third");
+});
+
 test("record_invoice rejects bad input before touching anything", async () => {
   for (const bad of [{ amount_ngn: -5 }, { amount_ngn: 10.001 }, { due_date: "8/11/2026" }, { direction: "SIDEWAYS" }]) {
     assert.equal((await call("record_invoice", { ...billAdeyemi, ...bad })).isError, true, JSON.stringify(bad));
@@ -252,6 +267,7 @@ test("cash_position: refreshes from Paystack, then totals what's owed both ways 
   assert.equal(data.owed_to_us.total, "₦315,000", "Adeyemi's payment is taken out");
   assert.deepEqual(data.just_paid, [{ id: "IN-0141", party: "Mrs Adeyemi", amount: "₦61,400" }], "and reported, so staff hear about it");
   assert.equal(data.owed_to_us.overdue_total, "₦295,000");
+  assert.deepEqual(data.owed_to_us.not_yet_due, [{ id: "IN-0139", party: "Mrs Okon", amount: "₦20,000", due_date: "2026-11-10" }], "named, not only in the total");
   assert.deepEqual(data.owed_to_us.overdue.map((i: Json) => [i.id, i.days_overdue]), [["IN-0140", 4], ["IN-0142", 2]], "oldest first");
   assert.deepEqual(data.we_owe_next_7_days.items.map((i: Json) => i.id), ["OUT-0057"]);
   assert.equal(data.we_owe_next_7_days.total, "₦85,000");

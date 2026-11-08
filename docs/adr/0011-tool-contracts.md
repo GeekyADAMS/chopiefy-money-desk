@@ -29,13 +29,18 @@ a normal result with `refused: "<reason>"` for the agent to pass on. An outage o
   "already recorded" rather than added again. If that row has no request code yet (Paystack failed last time),
   the retry creates the pay link for it. So a Sheet failure bills nobody, and a Paystack failure leaves a row the
   retry completes.
+- The "already recorded" reply carries what the first reply did: the pay link and message for IN, and the masked
+  account, account holder's name and `new_bank_details` for OUT. Every reply has to stand on its own (added
+  2026-11-08: in the recorded take, a supplier retry that returned only the ID led the model to take back bank
+  details it had reported correctly a turn earlier).
 - IDs are the highest existing number plus one. Two calls in the same second could pick the same ID; at
   one business's volume that is accepted and noted in code.
 
 **`cash_position`** `{}`
 - Refreshes open IN rows from Paystack (in parallel, at most 20), writes any that are now paid, and returns: the ones
   it just found paid (`just_paid`, added 2026-11-03, so staff hear about a payment without asking for it), owed to
-  us (total and overdue, overdue listed oldest first), what we owe in the next 7 days, and OUT rows waiting for the
+  us (total; overdue listed oldest first; not yet due listed by due date, added 2026-11-08 so an invoice recorded a
+  turn earlier shows by name, not only inside the total), what we owe in the next 7 days, and OUT rows waiting for the
   owner's approval (from `payoutDecision`). If Paystack can't be reached, it says the figures weren't refreshed.
 
 **`chase_debtor`** `{invoice_ids?}` (default: every overdue IN row)

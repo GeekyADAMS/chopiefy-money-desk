@@ -3,9 +3,10 @@
 A Chord teammate that records, tracks and settles every invoice in or out of Chopiefy from WhatsApp.
 This repo holds the MCP server that gives the teammate its tools. Paystack (test mode) moves the money and a Google Sheet keeps the books.
 
-Status: all five tools are live on Vercel and registered in Chord, and the Money Desk teammate runs our skill on Chord.
-Chord turns currently stop inside Chord with a billing-settlement error before any tool is called (field notes), so
-the end-to-end WhatsApp run waits on a fix from TSG Labs. The owner's go-live note is [docs/go-live.md](docs/go-live.md).
+Status: live. The Money Desk teammate runs our skill on Chord and calls these five tools from the WhatsApp
+simulator; the demo recording is a real simulator conversation (8 Nov 2026). Chord turns were blocked by a
+billing-settlement error from 3 Nov until TSG Labs fixed it on 6 Nov. The owner's go-live note is
+[docs/go-live.md](docs/go-live.md).
 
 ## Layout
 

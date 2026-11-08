@@ -52,8 +52,6 @@ async function refreshIn(row: Invoice): Promise<boolean | undefined> {
   return request.paid;
 }
 
-// ---------- banks ----------
-
 type Bank = { name: string; code: string; currency?: string };
 let banks: Bank[] | undefined; // cached per warm instance; the list rarely changes
 // Paystack also lists dollar accounts (a second "Zenith Bank", seen live); suppliers are paid in naira.
@@ -76,8 +74,6 @@ async function findBank(input: string): Promise<Bank | string> {
 }
 const bankName = async (code: Cell) => (await bankList()).find((b) => b.code === String(code))?.name ?? `bank ${code}`;
 const masked = (bank: string, account: Cell) => `${bank} ••••${String(account).slice(-4)}`;
-
-// ---------- tools ----------
 
 const amount = z.number().min(0.01).max(1_000_000_000).refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, "At most 2 decimal places");
 const ymd = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").refine((s) => !Number.isNaN(Date.parse(s)), "Not a real date");
@@ -102,7 +98,7 @@ async function recordInvoice(a: RecordArgs): Promise<Result> {
     if (!twin.paystack_code) return linkInvoice(twin, name, phone, String(party?.email ?? ""), now);
     return reply({ id: twin.id, already_recorded: true, ...customerLinks(name, phone, twin, now) });
   }
-  if (twin) return reply({ id: twin.id, already_recorded: true });
+  if (twin) return reply({ id: twin.id, already_recorded: true, ...(party?.kind === "supplier" && await supplierDetails(ledger, party)) });
 
   return a.direction === "IN" ? recordCustomerInvoice(a, ledger, party, name, now) : recordSupplierInvoice(a, ledger, party, name, now);
 }
@@ -170,8 +166,7 @@ async function recordSupplierInvoice(a: RecordArgs, ledger: Invoice[], party: Pa
         `invoice fraud happens, so I haven't recorded this. The owner should confirm with ${name} by phone and update the Parties tab.`);
     }
     recipientCode = party.recipient_code;
-    details = { account: masked(await bankName(party.bank_code), party.account_number), account_name: party.account_name,
-      new_bank_details: !bankDetailsVerified(ledger, party) };
+    details = await supplierDetails(ledger, party);
   } else {
     if (!a.bank || !a.account_number) return refuse(`${name} is a new supplier. I need their bank and 10-digit account number.`);
     const bank = await findBank(a.bank);
@@ -201,6 +196,11 @@ async function recordSupplierInvoice(a: RecordArgs, ledger: Invoice[], party: Pa
   return reply({ id, ...details });
 }
 
+async function supplierDetails(ledger: Invoice[], party: Party) {
+  return { account: masked(await bankName(party.bank_code), party.account_number), account_name: party.account_name,
+    new_bank_details: !bankDetailsVerified(ledger, party) };
+}
+
 async function cashPosition(): Promise<Result> {
   const [ledger, parties] = await read();
   const now = new Date();
@@ -213,7 +213,9 @@ async function cashPosition(): Promise<Result> {
   const justPaid = checked.filter((r) => statusOf(r) === "paid").map((r) => ({ id: r.id, party: r.party, amount: naira(r) }));
 
   const stillOwed = owed();
-  const overdue = stillOwed.filter((r) => isOverdue(String(r.due_date), now)).sort((x, y) => String(x.due_date).localeCompare(String(y.due_date)));
+  const byDue = (x: Invoice, y: Invoice) => String(x.due_date).localeCompare(String(y.due_date));
+  const overdue = stillOwed.filter((r) => isOverdue(String(r.due_date), now)).sort(byDue);
+  const notYetDue = stillOwed.filter((r) => !isOverdue(String(r.due_date), now)).sort(byDue);
   const weOwe = ledger.filter((r) => r.direction === "OUT" && unsettled(r));
   const soon = weOwe.filter((r) => String(r.due_date) <= addDays(today, 7));
   const limits = limitsFromEnv(process.env);
@@ -230,6 +232,7 @@ async function cashPosition(): Promise<Result> {
       total: sumNaira(stillOwed),
       overdue_total: sumNaira(overdue),
       overdue: overdue.map((r) => ({ id: r.id, party: r.party, amount: naira(r), due_date: r.due_date, days_overdue: daysBetween(String(r.due_date), today) })),
+      not_yet_due: notYetDue.map((r) => ({ id: r.id, party: r.party, amount: naira(r), due_date: r.due_date })),
     },
     we_owe_next_7_days: { total: sumNaira(soon), items: soon.map((r) => ({ id: r.id, party: r.party, amount: naira(r), due_date: r.due_date })) },
     waiting_for_approval: waiting,
@@ -301,7 +304,7 @@ async function checkStatus({ invoice_id }: { invoice_id: string }): Promise<Resu
   return reply({ id, ...(await settleTransfer(row, reference, transfer)) });
 }
 
-// ---------- supplier transfers (ADR 0005) ----------
+// Supplier transfers (ADR 0005).
 
 type Transfer = { status: string; amount?: number; updatedAt?: string };
 const TRANSFER_PENDING = new Set(["pending", "otp", "received", "processing", "queued"]);
