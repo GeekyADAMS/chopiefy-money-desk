@@ -4,6 +4,7 @@ import type { FakePaystack, FakeSheet } from "../test/fakes.js";
 import type { Invoice, Party } from "../lib/ledger.js";
 import { addDays } from "../lib/ledger.js";
 import { toKobo } from "../lib/paystack.js";
+import { formatNaira } from "../lib/rules.js";
 
 type Rows<T> = Partial<Omit<T, "row">>[];
 export interface SceneDeps {
@@ -14,6 +15,15 @@ export interface SceneDeps {
 }
 
 export const MAMA_NKECHI = { name: "Mama Nkechi", bank_code: "057", account_number: "0000000000", account_name: "Test" };
+export const DEMO_PAYOUT_NGN = 120_000; // what scripts/demo-script.txt pays Mama Nkechi
+
+// What `pnpm reset:demo` prints when Paystack's NGN balance (GET /balance, in kobo) can't cover the demo payout.
+export function balanceWarning(balances: { currency: string; balance: number }[]): string | null {
+  const have = balances.find((b) => b.currency === "NGN")?.balance ?? 0;
+  const need = toKobo(DEMO_PAYOUT_NGN);
+  return have >= need ? null
+    : `The Paystack test balance is ${formatNaira(have)}, less than the ${formatNaira(need)} the demo pays Mama Nkechi. Top up before the payout.`;
+}
 
 export async function demoScene({ today, first, recipient, request }: SceneDeps): Promise<{ parties: Rows<Party>; ledger: Rows<Invoice> }> {
   const parties: Rows<Party> = [

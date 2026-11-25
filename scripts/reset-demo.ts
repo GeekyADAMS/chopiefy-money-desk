@@ -1,10 +1,10 @@
 // Puts the live Sheet back to the demo's starting state (ADR 0013). Run: pnpm reset:demo
 // Refuses while any approval tick is set. IDs continue above the highest in the Ledger, because Paystack remembers
 // every transfer reference.
-import { paystack, PaystackError } from "../lib/paystack.js";
-import { lagosDate } from "../lib/rules.js";
+import { paystack, PaystackError, toKobo } from "../lib/paystack.js";
+import { formatNaira, lagosDate } from "../lib/rules.js";
 import { COLUMNS, readRows, sheets, type Cell } from "../lib/sheet.js";
-import { demoScene, MAMA_NKECHI } from "./demo-scene.js";
+import { balanceWarning, demoScene, DEMO_PAYOUT_NGN, MAMA_NKECHI } from "./demo-scene.js";
 
 const PAID_REQUEST = "PRQ_c62ykxhst5e1skq"; // ₦61,400, paid with a test card on 2026-11-01 (field notes)
 const stop = (message: string): never => {
@@ -68,3 +68,9 @@ await sheets("POST", "/values:batchUpdate", { valueInputOption: "RAW", data: [
 await sheets("POST", "/values:batchClear", { ranges: [`Parties!A${scene.parties.length + 2}:H`, `Ledger!A${scene.ledger.length + 2}:M`] });
 
 console.log(`Reset: ${scene.parties.length} parties and ${scene.ledger.length} invoices, ${scene.ledger[0]!.id} to ${scene.ledger.at(-1)!.id}.`);
+
+// 5. Each full take really pays Mama Nkechi in test mode, so the balance drains between takes. Warn, don't stop: the
+// reset above has already succeeded.
+const warning = await paystack<{ currency: string; balance: number }[]>("GET", "/balance").then(balanceWarning,
+  (err: Error) => `Couldn't read the Paystack balance (${err.message}). Check it covers ${formatNaira(toKobo(DEMO_PAYOUT_NGN))} before the payout.`);
+console.log(warning ? `Warning: ${warning}` : "Paystack balance covers the demo payout.");

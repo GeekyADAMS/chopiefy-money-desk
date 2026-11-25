@@ -34,6 +34,10 @@ pays out and is named "Test" is Zenith (057) 0000000000.
   when the script pauses for it. It's the fallback recording if Chord's billing-settlement failure isn't fixed in
   time (field notes, 2026-11-03 onwards), and it's run after `pnpm reset:demo`. `pnpm watch` names its client "the
   rehearsal", so a viewer never mistakes it for Chord.
+- Added 2026-11-25: after writing the scene, `pnpm reset:demo` reads the Paystack test balance and warns if it's
+  below the ₦120,000 the demo pays Mama Nkechi, or if it can't read it. It warns rather than stops, because the
+  reset itself has already succeeded and the earlier beats don't need the balance. Each run of the full demo pays
+  out for real in test mode, so a balance that covered the last take may not cover the next one.
 
 ## Consequences
 - Wording, tool choice, arguments and refusals are fixed before any credit is spent. The rehearsal can't show how

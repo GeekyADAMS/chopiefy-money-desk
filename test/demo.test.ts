@@ -2,7 +2,7 @@
 // every step the recording shows has a tool result behind it; the rehearsal then checks the agent's side.
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, mock, test } from "node:test";
-import { loadDemo } from "../scripts/demo-scene.js";
+import { balanceWarning, loadDemo } from "../scripts/demo-scene.js";
 import { COLUMNS } from "../lib/sheet.js";
 import { callTool as call, fakeWorld, type FakePaystack, type FakeSheet } from "./fakes.js";
 
@@ -67,4 +67,11 @@ test("the demo, step by step", async () => {
   // 2:35 Pay her again: refused, nothing sent.
   assert.match((await call("pay_supplier", { invoice_id: "OUT-0006" })).data.refused, /already paid/);
   assert.equal(Object.keys(paystack.transfers).length, 1);
+});
+
+test("reset:demo warns when the Paystack balance can't cover the demo payout", () => {
+  assert.equal(balanceWarning([{ currency: "NGN", balance: 12_000_000 }]), null, "exactly ₦120,000 is enough");
+  assert.equal(balanceWarning([{ currency: "USD", balance: 0 }, { currency: "NGN", balance: 50_000_000 }]), null);
+  assert.match(balanceWarning([{ currency: "NGN", balance: 11_999_999 }])!, /₦119,999\.99.*₦120,000/);
+  assert.match(balanceWarning([{ currency: "USD", balance: 99_999_999 }])!, /₦0\b/, "only the NGN balance pays a naira transfer");
 });
