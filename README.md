@@ -47,7 +47,7 @@ pnpm dev                        # local server via the Vercel CLI, endpoint at /
 pnpm rehearse                   # the demo conversation off Chord: no credits, no Paystack (needs the claude CLI)
 pnpm rehearse --live            # the same against production: real Sheet, Paystack test mode, you tick and pay
 pnpm watch                      # every call to the live server as it happens, in plain English (needs the vercel CLI)
-pnpm reset:demo                 # live Sheet back to the demo's start; untick every approval first
+pnpm reset:demo                 # live Sheet back to the demo's start, then checks the Paystack balance; untick first
 ```
 
 Try the tools by hand with the MCP Inspector: `pnpm dlx @modelcontextprotocol/inspector`, transport "Streamable HTTP",
